@@ -1,0 +1,14 @@
+# Kalos Dex flash layout (4 MB).
+# The first entries keep the standard Arduino/PlatformIO positions (PlatformIO always writes the
+# "which app to boot" file at 0xE000 – moving otadata caused a boot loop, 2026-10-15).
+# Our own 64 KB storage area ("kalos", for settings + pet saves) is separate from the system NVS,
+# which spreads flash wear and keeps our data apart from system data. Two app slots (OTA unused – USB only;
+# kept so the layout and the saved data never move).
+# Name,   Type, SubType,  Offset,   Size
+nvs,      data, nvs,      0x9000,   0x5000
+otadata,  data, ota,      0xE000,   0x2000
+app0,     app,  ota_0,    0x10000,  0x1C0000
+app1,     app,  ota_1,    0x1D0000, 0x1C0000
+kalos,    data, nvs,      0x390000, 0x10000
+spiffs,   data, spiffs,   0x3A0000, 0x50000
+coredump, data, coredump, 0x3F0000, 0x10000

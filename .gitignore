@@ -1,0 +1,10 @@
+.pio/
+.vscode/
+__pycache__/
+*.pyc
+# third-party prop model and meshes made from it (not redistributable)
+reference/
+scad/stl/_build/
+scad/stl/main/red_cap_x2.stl
+scad/stl/main/white_cap_rim_x2.stl
+scad/stl/main/black_cap_band_x2.stl
