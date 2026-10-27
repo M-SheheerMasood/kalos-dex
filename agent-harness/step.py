@@ -19,7 +19,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 FW = ROOT / "kalos-dex/firmware/kalos-dex"
-PIO = "/mnt/c/Users/<user>/.platformio/penv/Scripts/pio.exe"
+PIO = "pio"   # PlatformIO CLI (the private copy has the full path to it here)
 LAST = ROOT / ".agent/state/last_check.json"
 STEPS = ROOT / ".agent/state/steps"
 LOG = ROOT / "kalos-dex/docs/session-log.md"

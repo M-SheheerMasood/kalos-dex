@@ -19,7 +19,7 @@ ROOT = os.path.dirname(AGENT_DIR)
 ZONES = os.path.join(AGENT_DIR, "zones.json")
 UNLOCK = os.path.join(AGENT_DIR, "zones.unlock")      # written only by .agent/zone.sh, run by the user
 TRACE = os.path.join(AGENT_DIR, "logs", "trace.jsonl")
-WIN_ROOT = "c:/users/<user>/desktop/lums/esp 32 kalos project"
+WIN_ROOT = "c:/path/to/project"   # the project root as Windows writes it (lower case)
 
 FILE_TOOLS = {"Read": "read", "Edit": "edit", "MultiEdit": "edit", "Write": "edit", "NotebookEdit": "edit"}
 SEARCH_TOOLS = {"Glob", "Grep"}

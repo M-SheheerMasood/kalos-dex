@@ -53,7 +53,7 @@ About two weeks from idea to a closed, working box. These are the main problems,
 
 ## Agent workflow (v0.7.0)
 - Rules in a text file weren't enough, so I paused the firmware until the important ones were enforced by hooks (docs/agent-workflow.md).
-- The first guard blocked real work (wildcards inside quotes, running the project's Python environment). Each fix was proposed with pros and cons and only applied after I approved it; the guard's tests grew with every fix (65 → 166 cases). One false block reached 3 hits under my 3-strike rule and got fixed; another is still in the tally.
+- The first guard blocked real work (wildcards inside quotes, running the project's Python environment). Each fix was proposed with pros and cons and only applied after I approved it; the guard's tests grew with every fix (65 → 167 cases). One false block reached 3 hits under my 3-strike rule and got fixed; another is still in the tally.
 - A script once wrote into a locked folder because the guard only checks commands. The agent reported it to me first. Now the guard reads scripts the agent wrote before they run, and the step check fails on any change inside a locked zone until I clear it. Every command from that day was replayed through the old and new guard to check for false blocks first.
 
 ## Testing

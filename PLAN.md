@@ -51,8 +51,8 @@ PlatformIO project `firmware/kalos-dex/` (`esp32dev`, Arduino). **Two builds fro
 - **PC backup of the pet save** every hour + after hatch / evolution / level-up.
 
 ## 3d. Pet design decisions (user, 2026-10-27) – F6b onwards
-- **Line: Honedge → Doublade → Aegislash** (PMD Sprite Collab fan sprites, credited in `assets/sprites-src/CREDITS.md`, git-ignored). Shiny 1 in 20 at hatch (kept).
-- **Public repo: ignored for now** – before the next push, stub or redact the sprites (e.g. the blob fallback) so no sprite data goes public.
+- **Line: Honedge → Doublade → Aegislash** (PMD Sprite Collab fan sprites; the sheets and their artist credits are kept locally with the sprites, never committed). Shiny 1 in 20 at hatch (kept).
+- **Public repo: no sprite data** (done for v0.7.0) – the sprite sheets and the generated sprite / bubble data are git-ignored; without them the build uses the placeholder blob line, so the public firmware still compiles.
 - **Nothing evolves by itself.** When it *can* evolve, a symbol shows; the user confirms (planned: hold Feed + Play) and watches the animation. Same for mega evolutions / form changes later.
 - **Honedge → Doublade at Lv 35.** Stone / trade evolutions get **custom mechanics** instead (e.g. Doublade → Aegislash "Dusk Stone" → at night + fed, or similar) – designed one by one, noted here when decided.
 - **Forms:** Aegislash = Shield normally, Sword while playing. Open for later: small random battles (→ Sword form), mega evolutions with conditions (e.g. food + fun high → a symbol → confirm).

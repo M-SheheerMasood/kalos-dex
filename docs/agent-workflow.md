@@ -21,7 +21,7 @@ The harness is a few of those scripts plus a step tool:
 | Piece | What it does |
 |---|---|
 | **Zones** (`zones.json`) | The project is split into zones. *Locked* zones (finished hardware, old archives, build output, the public repo folder, closed log volumes) can't be read, searched or edited. *Read-only* zones (the harness itself, reference docs) can be read but not changed. |
-| **Zone guard** (`hooks/zone_guard.py`) | Runs before **every** tool call. Checks file paths, search roots and shell commands (including wildcards that could expand into a locked folder) against the zones, and denies with a reason. Before a script the agent wrote runs, its text gets the same check. Fails closed: if the guard itself breaks, tools are denied. 166 test cases. |
+| **Zone guard** (`hooks/zone_guard.py`) | Runs before **every** tool call. Checks file paths, search roots and shell commands (including wildcards that could expand into a locked folder) against the zones, and denies with a reason. Before a script the agent wrote runs, its text gets the same check. Fails closed: if the guard itself breaks, tools are denied. 167 test cases. |
 | **Unlocking** (`zone.sh`) | Only I can unlock a zone, by typing the command myself. The agent has to ask, say why, and wait. |
 | **Hard gates** | Some commands are denied no matter what: git push / merge / pull / rebase / reset --hard / amend, deleting branches or tags, turning hooks off, editing the agent's settings. The agent prepares the exact line, and I run it. |
 | **Trace** | Every tool call is logged (time, session, which agent or sub-agent, tool, target, allowed or denied, which rule). |

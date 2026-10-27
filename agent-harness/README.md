@@ -11,7 +11,7 @@ JSON on stdin.
 | File | Role |
 |---|---|
 | `hooks/zone_guard.py` | pre-tool hook: zones, wildcard/shell checks, hard gates, trace log |
-| `hooks/test_zone_guard.py` | 166 cases: allowed / denied, with the reason |
+| `hooks/test_zone_guard.py` | 167 cases: allowed / denied, with the reason |
 | `hooks/events.py` (+ `test_events.py`) | session start/resume/compaction state feed, stop reminder, file-size warning |
 | `hooks.json` | which event runs which script |
 | `zones.json` | the zones: locked, read-only, active search roots, allowed commands |
