@@ -9,23 +9,32 @@
 // add fields only into `spare` (and keep the size), or bump PET_VERSION (old saves would be dropped).
 struct PetSave {
   uint8_t line, stage, level, flags;           // flags bit 0 = shiny
-  uint16_t food, fun, energy, reserved;
+  uint16_t food, fun, energy, nights;         // nights slept (was "reserved": old saves read 0)
   uint32_t xp, eggSec, contentSec;
   uint32_t savedUtc;                           // when this copy was written (0 = time unknown)
   uint32_t hatchedUtc, feeds, plays;
-  uint8_t spare[8];
+  uint32_t togetherSec;                        // switched on together (egg included) – was spare, old saves read 0
+  uint32_t metUtc;                             // when the egg arrived (0 = unknown)
+  // ---- version 2 (2026-10-27): the first 48 bytes are exactly version 1, so v1 saves are read and kept
+  uint32_t lastCareUtc;                        // last accepted feed / play (0 = unknown): 24 h without -> angry
+  uint8_t calm;                                // angry: counted tries so far (3rd one is accepted)
+  uint8_t flags2;                              // spare bits (S4: egg ready, evolve ready)
+  uint16_t spare16;
+  uint32_t spare[2];
 };
-static_assert(sizeof(PetSave) == 48, "PetSave layout changed");
-static constexpr uint16_t PET_VERSION = 1;
+static_assert(sizeof(PetSave) == 64, "PetSave layout changed");
+static constexpr uint16_t PET_VERSION = 2, PET_V1_SIZE = 48;
 
 static PetSave p;                       // integer fields live here; the stats as floats below
-static float sFood, sFun, sEnergy, eggSec, contentSec;
+static float sFood, sFun, sEnergy, eggSec, contentSec, together;
 static storage::Slot slot;
 static bool dirty = false, glowHeld = false, isAsleep = false;
 static uint32_t changedAt = 0, savedAt = 0, lastTick = 0, wokeAt = 0, ver = 1;
 static pet::Mood curMood = pet::Mood::Egg;
 static const char *msg = "";
 static uint32_t msgAt = 0;
+static uint32_t lastTryMs = 0;   // angry: when the last counted try was (millis) ...
+static bool tried = false;       // ... once there was one this power-on
 static int shown[4] = {-1, -1, -1, -1}; // whole-number stats + egg minutes last shown (redraw when they change)
 
 static uint32_t need(uint8_t lvl) { return PET_XP_BASE + PET_XP_STEP * lvl; }
@@ -56,10 +65,17 @@ static void simulate(float sec, bool asleep, bool timeKnown, float floor) {
   }
 }
 
+// angry = no accepted feed / play for PET_ANGRY_AFTER_S, real time (counts while switched off; unknown time = never)
+static bool isAngry() {
+  return p.stage && p.lastCareUtc && timekeeper::valid() &&
+         (uint32_t)timekeeper::nowUtc() - p.lastCareUtc >= PET_ANGRY_AFTER_S;
+}
+
 static pet::Mood calcMood() {
   using M = pet::Mood;
   if (!p.stage) return M::Egg;
   if (isAsleep) return M::Sleeping;
+  if (isAngry()) return M::Angry;
   if (sFood < 25) return M::Hungry;
   if (sEnergy < PET_TOO_TIRED) return M::Tired;
   if (sFun < 30) return M::Sad;
@@ -77,9 +93,10 @@ static void applyGlow() {
     case pet::Mood::Hungry:   leds::setEffect(E::Pulse, 0xFF7000, 1500); break;    // yellow-orange pulse
     case pet::Mood::Tired:    leds::setEffect(E::Breathe, 0x8040A0, 6000); break;  // soft purple
     case pet::Mood::Sad:      leds::setEffect(E::Breathe, 0x2050FF, 6000); break;  // soft blue
+    case pet::Mood::Angry:    leds::setEffect(E::Pulse, 0xFF1000, 700); break;     // fast red pulse
     default:                  leds::setEffect(E::Breathe, 0xFFB040, 4000); break;  // day: warm yellow
   }
-  const bool needsYou = curMood == pet::Mood::Hungry || curMood == pet::Mood::Sad;
+  const bool needsYou = curMood == pet::Mood::Hungry || curMood == pet::Mood::Sad || curMood == pet::Mood::Angry;
   leds::setStatus(leds::Status::Red, needsYou ? leds::Mode::On : leds::Mode::Off);
 }
 
@@ -94,7 +111,7 @@ static void refreshMood() {
 
 static void save() {
   p.food = lroundf(sFood * 100); p.fun = lroundf(sFun * 100); p.energy = lroundf(sEnergy * 100);
-  p.eggSec = eggSec; p.contentSec = contentSec;
+  p.eggSec = eggSec; p.contentSec = contentSec; p.togetherSec = together;
   p.savedUtc = timekeeper::valid() ? timekeeper::nowUtc() : 0;
   if (storage::saveRecord("pet", PET_VERSION, &p, sizeof p, slot)) { dirty = false; savedAt = millis(); }
   else Serial.println("pet: SAVE FAILED");
@@ -104,13 +121,15 @@ static void newEgg() {
   memset(&p, 0, sizeof p);
   p.line = PET_LINE.id;
   sFood = sFun = sEnergy = 100;
-  eggSec = contentSec = 0;
+  eggSec = contentSec = together = 0;
+  p.metUtc = timekeeper::valid() ? timekeeper::nowUtc() : 0;
 }
 
 static void hatch() {
   p.stage = 1; p.level = 1; p.xp = 0;
   p.flags = (esp_random() % PET_SHINY_ONE_IN == 0) ? 1 : 0;
   p.hatchedUtc = timekeeper::valid() ? timekeeper::nowUtc() : 0;
+  p.lastCareUtc = p.hatchedUtc;
   sFood = 80; sFun = 80; sEnergy = 100;
   leds::flash(0xFFFFFF, 1500);
   say(p.flags & 1 ? "It hatched... a SHINY!" : "It hatched!");
@@ -124,12 +143,7 @@ static void gainXp(uint32_t n) {
     p.xp -= need(p.level);
     p.level++;
     leds::flashRainbow(1500);
-    say("Level up!");
-    if (p.stage < 3 && p.level >= PET_LINE.evolveAt[p.stage - 1]) {
-      p.stage++;
-      leds::flash(0xFFFFFF, 2000);
-      say("What? It's evolving!");
-    }
+    say("Level up!");   // never evolves here: the user confirms an evolution (PLAN §3d, comes with S5)
   }
   if (p.level >= PET_MAX_LEVEL) p.xp = 0;
   changed();
@@ -148,9 +162,21 @@ static void catchUp(time_t from, uint32_t seconds) {
 namespace pet {
 
 void begin() {
-  if (storage::loadRecord("pet", PET_VERSION, &p, sizeof p, slot)) {
+  bool loaded = storage::loadRecord("pet", PET_VERSION, &p, sizeof p, slot);
+  if (!loaded) {   // a version 1 save (48 bytes): same fields, the new ones start at zero
+    memset(&p, 0, sizeof p);
+    loaded = storage::loadRecord("pet", 1, &p, PET_V1_SIZE, slot);
+    if (loaded) {
+      p.lastCareUtc = p.savedUtc;   // counts as cared for when it was last saved
+      Serial.println("pet: version 1 save -> kept, now version 2");
+      dirty = true;                 // write it in the new format soon
+    }
+  }
+  if (loaded) {
     sFood = p.food / 100.f; sFun = p.fun / 100.f; sEnergy = p.energy / 100.f;
-    eggSec = p.eggSec; contentSec = p.contentSec;
+    eggSec = p.eggSec; contentSec = p.contentSec; together = p.togetherSec;
+    if (!p.metUtc && timekeeper::valid())   // pets from before this was saved: best guess = hatch day, else now
+      p.metUtc = p.hatchedUtc ? p.hatchedUtc : timekeeper::nowUtc();
     Serial.printf("pet: loaded (seq %lu, slot %c)\n", (unsigned long)slot.seq, slot.slot);
     if (p.savedUtc && timekeeper::valid() && timekeeper::nowUtc() > (time_t)p.savedUtc) {
       const uint32_t off = timekeeper::nowUtc() - p.savedUtc;
@@ -178,7 +204,12 @@ void update(uint32_t now) {
   const bool known = timekeeper::valid();
   const bool woken = wokeAt && now - wokeAt < PET_WAKE_MS;
   const bool sleepNow = p.stage && known && nightAt(timekeeper::nowUtc()) && !woken;
-  if (sleepNow != isAsleep) { isAsleep = sleepNow; say(sleepNow ? "Zzz..." : "Good morning!"); }
+  if (sleepNow != isAsleep) {
+    isAsleep = sleepNow;
+    if (sleepNow) { p.nights++; changed(); }
+    say(sleepNow ? "Zzz..." : "Good morning!");
+  }
+  together += sec;
 
   if (!p.stage) {
     eggSec += sec;
@@ -198,16 +229,35 @@ void update(uint32_t now) {
   if ((dirty && now - changedAt > 3000) || now - savedAt > PET_SAVE_EVERY_MS) save();
 }
 
+static void careNow() {   // an accepted feed / play: no longer angry
+  if (timekeeper::valid()) p.lastCareUtc = timekeeper::nowUtc();
+  p.calm = 0;
+  tried = false;
+}
+
+// angry: refuses; a try counts only PET_CALM_TRY_MS after the last counted one (spam doesn't calm it);
+// the PET_CALM_TRIES-th counted try is accepted (PLAN §3d)
+static bool refuseAngry() {
+  if (!isAngry()) return false;
+  const uint32_t now = millis();
+  if (!tried || now - lastTryMs >= PET_CALM_TRY_MS) { tried = true; lastTryMs = now; p.calm++; changed(); }
+  if (p.calm < PET_CALM_TRIES) { say(p.calm + 1 == PET_CALM_TRIES ? "Hmph... almost." : "Hmph!"); return true; }
+  careNow();
+  return false;
+}
+
 void wake() { if (isAsleep || nightAt(timekeeper::nowUtc())) wokeAt = millis(); }
 
 Result feed() {
   if (!p.stage) { say("It's still an egg."); return Result::Egg; }
   wake();
+  if (refuseAngry()) return Result::Angry;
   if (sFood >= PET_FULL_AT) { say("I'm full!"); return Result::Full; }
   if (sFood < 70) gainXp(PET_XP_FEED);
   sFood = min(100.f, sFood + PET_FEED_FOOD);
   sFun = min(100.f, sFun + PET_FEED_FUN);
   p.feeds++;
+  careNow();
   leds::flash(0x30FF60, 600);
   say("Yum!");
   changed();
@@ -218,12 +268,14 @@ Result feed() {
 Result play() {
   if (!p.stage) { say("It's still an egg."); return Result::Egg; }
   wake();
+  if (refuseAngry()) return Result::Angry;
   if (sEnergy < PET_TOO_TIRED) { say("Too tired..."); return Result::TooTired; }
   if (sFun < 90) gainXp(PET_XP_PLAY);
   sFun = min(100.f, sFun + PET_PLAY_FUN);
   sEnergy = max(0.f, sEnergy - PET_PLAY_ENERGY);
   sFood = max(0.f, sFood - PET_PLAY_FOOD);
   p.plays++;
+  careNow();
   leds::flashRainbow(800);
   say("Yay!");
   changed();
@@ -233,12 +285,19 @@ Result play() {
 
 Mood mood() { return curMood; }
 const char *moodName(Mood m) {
-  static const char *N[] = {"Egg", "Sleeping", "Hungry", "Tired", "Sad", "Happy", "Okay"};
+  static const char *N[] = {"Egg", "Sleeping", "Hungry", "Tired", "Sad", "Happy", "Okay", "Angry"};
   return N[(int)m];
 }
 bool hatched() { return p.stage > 0; }
 uint8_t stage() { return p.stage; }
-const char *name() { return p.stage ? PET_LINE.names[p.stage - 1] : "Egg"; }
+const char *name() { return p.stage ? PET_LINE.stage[p.stage - 1].name : "Egg"; }
+uint32_t togetherS() { return together; }
+uint32_t metUtc() { return p.metUtc; }
+uint32_t hatchedUtc() { return p.hatchedUtc; }
+uint32_t feeds() { return p.feeds; }
+uint32_t plays() { return p.plays; }
+uint16_t nights() { return p.nights; }
+uint8_t nextEvolveLevel() { return p.stage >= 1 && p.stage < 3 ? PET_LINE.evolveAt[p.stage - 1] : 0; }
 bool shiny() { return p.flags & 1; }
 bool asleep() { return isAsleep; }
 float food() { return sFood; }
@@ -281,6 +340,20 @@ void skipMinutes(uint32_t minutes) {
 }
 void addXp(uint32_t n) { gainXp(n); }
 void hatchNow() { if (!p.stage) hatch(); refreshMood(); }
+void setCareHoursAgo(uint32_t hours) {
+  if (!timekeeper::valid()) return;
+  p.lastCareUtc = timekeeper::nowUtc() - hours * 3600;
+  p.calm = 0; tried = false;
+  refreshMood();
+  changed();
+}
+void setStage(uint8_t s) {   // jump to a form without the evolution (hatches first if needed)
+  if (!p.stage) hatch();
+  p.stage = constrain(s, 1, 3);
+  refreshMood();
+  changed();
+}
+void setShiny(bool on) { p.flags = on ? (p.flags | 1) : (p.flags & ~1); changed(); }
 void setStat(char which, float v) {
   v = constrain(v, 0.f, 100.f);
   if (which == 'f') sFood = v; else if (which == 'u') sFun = v; else if (which == 'e') sEnergy = v;

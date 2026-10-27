@@ -5,7 +5,11 @@ A desk gadget I designed and built, shaped like the expanded Kalos Pokédex from
 
 The finished box on my desk with the Minecraft clock, and the boot animation.
 
-**Status:** hardware built and the box is closed, firmware v0.6.0 on the device. Pet sprites and the PC companion app are in progress.
+**Status:** hardware built and the box is closed, firmware v0.7.0 on the device: pet sprites with reactions and mood bubbles, a new rounder UI, and an agent workflow enforced by hooks (below). The PC companion app is next.
+
+<img width="240" alt="Render of the Settings screen: rounded font, card rows, HP-style bars" src="media/render-settings.png" /> <img width="240" alt="Render of the Home screen: pet, clock, mood and four HP-style bars" src="media/render-home.png" />
+
+Renders of the current Settings and Home screens (the public build shows a placeholder pet; the Pokémon sprites I use on my own unit come from a fan sprite project and aren't redistributed here).
 
 **Why I made it:**
 - I used to watch Pokémon and Kalos was my favourite region, mostly because of the animation. When I was thinking about what to build, a Pokédex was the obvious shape. Of all of them, the Kalos one is the cleanest to design and print around: it's basically a screen and its two sides.
@@ -17,6 +21,8 @@ The finished box on my desk with the Minecraft clock, and the boot animation.
 - Measured every part with calipers and ran test prints to set the printer tolerances (0.2 mm snug, 0.25 mm sliding).
 - All the soldering, wiring, 3D printing and assembly, on a fixed parts budget and a single-colour printer.
 - Tested every step on the real hardware and caught the problems along the way.
+- The rules for how the AI agent works on this project, and the hooks that enforce them (docs/agent-workflow.md).
+- The look and feel: after testing on the device I moved the UI from blocky pixel fonts and thin square bars to a rounded font and Pokémon-style HP bars, picked the display settings for my viewing angle by eye, and designed the pet's mood bubbles. Nothing about the pet happens without me: it never evolves or hatches on its own, it waits for my OK.
 
 <img width="300" alt="Inside the case: ESP32 on its carrier, wires to every module, screen face folded out" src="media/inside-wiring.jpg" />
 
@@ -31,20 +37,25 @@ Inside, with the screen face folded out: the ESP32 on its perfboard carrier at t
 
 **Next time:**
 - More test prints before the real ones.
+- Check the screen's viewing angle on day one: it's a TN panel, and from my desk the colours shift; the UI had to be designed around it later.
+- Set up the agent's rules as enforced checks from the start, and expect the first version of each check to need tuning in real use.
 - Plan the physical layout as early as the wiring. This time the pin plan was done early but where each part sits in the housing wasn't, and the RTC and the knob board both ended up fighting for space: the RTC holder on the lid sat where the knob's plugs needed to go, and the knob board needed two trims in the printed tub.
 
 **How I worked (agentic workflow):**
-The code is vibe coded with an AI coding assistant, which also turned my layout and measurements into parametric OpenSCAD. The workflow:
+All the code is written by an AI coding assistant (vibe coded), which also turned my layout and measurements into parametric OpenSCAD. I make the decisions and test everything; the agent plans, writes and checks its own work. The workflow:
 - AGENTS.md: the rules the agent follows (plan first, one small tested step at a time, safety warnings before each step, I do all the wiring).
 - PLAN.md: design and decisions written down and approved before any code. Firmware steps F0–F9, each with a test that proves it works.
 - Every step was built, uploaded and checked on the device (serial logs, test screens, a power test) before the next one. Things that didn't work got redone; docs/build-notes.md has the main ones.
+- **Since v0.7.0: a harness that enforces it** (docs/agent-workflow.md, code in agent-harness/). I paused the firmware until the rules were checked by hooks instead of trusted: locked zones of the project that only I can unlock, hard gates so the agent never pushes or rewrites git history (it prepares the line, I run it), every tool call logged, and a step tool that only commits the exact tree that passed the tests and both builds. It's experimental, so the agent reports any problem with it to me first, and a wrong block only gets a fix after it happened 3 times. The page also walks through one real task (the UI redesign) and what had to change in the guards once they met real use.
 
 **Hardware:**
 - ESP32 DevKit V1, 3.2" ILI9341 SPI screen, KY-040 knob, 3 buttons (Feed, Play, Back), 16 WS2812B LEDs, 3 status LEDs, DS1307 RTC (modified so it doesn't charge its coin cell).
 - Pins: docs/pinout.md, wiring diagram: docs/wiring-diagram/wiring-diagram.html
 
 **Firmware (C++, PlatformIO, Arduino, TFT_eSPI, Adafruit NeoPixel):**
-- Virtual pet: stats drop in real time, even while unplugged (it catches up on boot), XP, levels, evolutions, mood shown on the LEDs.
+- Virtual pet: stats drop in real time, even while unplugged (it catches up on boot), XP, levels, evolutions (only when I allow them), mood shown on the LEDs and as a bubble over the pet, reactions to feeding and playing, refuses when full, gets angry after a day without care.
+- Pet sprites: one Pokémon line per firmware build (my idea, to save memory), converted from sprite sheets into 4-bit data with a normal and a shiny palette (tools/sprite_convert.py). The sprite data is never committed; without it the build uses a placeholder pet.
+- UI: Nunito ExtraBold (SIL Open Font License) converted to anti-aliased bitmap fonts (tools/font_convert.py), Pokémon-style HP bars, layout checked so nothing runs off the screen or under the case's top edge.
 - Power-cut-safe saves: every record goes to 2 slots with a sequence number + CRC32. A backup to the PC comes with the companion app.
 - Memory budget: no PSRAM and the biggest free RAM block is ~107 KB, so no full-screen buffer; screens draw in strips and only hold big buffers while they're shown.
 - LED current limiter keeps the whole gadget under ~450 mA (USB 2 gives 500 mA).

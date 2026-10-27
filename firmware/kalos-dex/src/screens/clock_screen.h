@@ -12,6 +12,7 @@ class ClockScreen : public Screen {
   void enter() override;
   void update(uint32_t now) override;
   bool onEvent(const InputEvent &e) override;
+  void repaintTop() override { lastSec = -1; }   // the next update draws the whole face again
  private:
   void render(const struct tm &lt, bool ok);
   int lastSec = -1;

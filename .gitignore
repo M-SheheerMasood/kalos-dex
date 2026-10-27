@@ -8,3 +8,6 @@ scad/stl/_build/
 scad/stl/main/red_cap_x2.stl
 scad/stl/main/white_cap_rim_x2.stl
 scad/stl/main/black_cap_band_x2.stl
+# pet sprite packs and the data made from them (fan art, not redistributed; the build falls back to a placeholder)
+assets/sprites-src/
+firmware/kalos-dex/sprites/

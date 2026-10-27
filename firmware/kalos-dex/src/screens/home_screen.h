@@ -11,10 +11,13 @@ class HomeScreen : public Screen {
   void update(uint32_t now) override;
   void leave() override;
   bool onEvent(const InputEvent &e) override;
+  void repaintTop() override { drawHeader(); }
  private:
+  void drawHeader();
   void drawInfo();             // header, clock row, message, bars
   void drawPet(uint32_t now);  // the animated pet area (off-screen, then pushed)
-  uint32_t shownVersion = 0, lastFrame = 0;
+  uint32_t shownVersion = 0, shownFrame = 0, shownHead = UINT32_MAX;
   int lastMinute = -1;
   bool msgShown = false;
+  int8_t shownLayout = -1;   // 0 = egg rows, 1 = pet rows, -1 = not drawn yet
 };

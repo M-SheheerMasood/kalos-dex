@@ -18,6 +18,7 @@ static bool flashRb = false;
 static bool visible[STRIP_LEN];
 static int calibrating = -1;
 static int lastMa = 0;
+static bool safe = false;
 
 static const char *EFFECT_NAMES[] = {"Off", "Solid", "Breathe", "Pulse", "Rainbow"};
 
@@ -39,6 +40,7 @@ void begin() {
   strip.show();
 }
 
+void setSafe(bool on) { safe = on; }
 void setStatus(Status which, Mode mode) { statusMode[(int)which] = mode; }
 const char *effectName(Effect e) { return EFFECT_NAMES[(int)e]; }
 void setEffect(Effect e, uint32_t colour, uint16_t periodMs) { effect = e; effColour = colour; effPeriod = max<uint16_t>(periodMs, 200); }
@@ -59,9 +61,9 @@ void setVisibleMask(uint32_t m) { for (int i = 0; i < STRIP_LEN; i++) visible[i]
 void update(uint32_t now) {
   // status LEDs
   for (int i = 0; i < 3; i++) {
-    bool on = statusMode[i] == Mode::On ||
+    bool on = !safe && (statusMode[i] == Mode::On ||
               (statusMode[i] == Mode::BlinkSlow && (now / 500) % 2) ||
-              (statusMode[i] == Mode::BlinkFast && (now / 120) % 2);
+              (statusMode[i] == Mode::BlinkFast && (now / 120) % 2));
     digitalWrite(STATUS_PIN[i], on);
   }
 
@@ -84,7 +86,7 @@ void update(uint32_t now) {
     }
     if (now < flashUntil) c = flashRb ? Adafruit_NeoPixel::ColorHSV(uint16_t(now * 120) + i * 65536L / STRIP_LEN) : flashColour;
     if (calibrating >= 0) c = (i == calibrating) ? 0xFFFFFF : 0;
-    else if (!visible[i]) c = 0;
+    else if (!visible[i] || safe) c = 0;
     frame[i] = c;
   }
 

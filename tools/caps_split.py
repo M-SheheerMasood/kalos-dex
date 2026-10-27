@@ -17,7 +17,7 @@ import sys, os
 import numpy as np, trimesh, manifold3d
 
 SRC = sys.argv[1]
-OUT = os.path.join(os.path.dirname(__file__), '..', 'scad', 'stl', 'main')
+OUT = os.path.join(os.path.dirname(__file__), '..', '..', 'scad', 'stl', 'main')
 HALF_T = 7.15          # front-half thickness = the cut plane (Y)
 STEP = 0.2             # sweep step (rim is >= 1.5 mm thick everywhere, so steps leave no gaps)
 GLUE = 0.15            # sideways clearance between the rim and the cap's pocket

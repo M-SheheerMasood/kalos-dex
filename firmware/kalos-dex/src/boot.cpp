@@ -1,5 +1,6 @@
 #include "boot.h"
 #include "display.h"
+#include "storage.h"
 
 // The two red halves are drawn once into off-screen sprites, then slid apart frame by frame.
 // The screen behind them (background + logo) is one more sprite. 8-bit colour keeps the three
@@ -9,6 +10,7 @@ static constexpr int RING_R = 64;      // white rim outer radius
 static constexpr int BAND_R = 60;      // black band outer radius
 static constexpr int INNER_R = 44;     // screen visible inside the band
 static constexpr int OPEN_PX = 98;     // how far each half slides
+static constexpr float GROOVE_R1 = 71, GROOVE_R2 = 97, GROOVE_HALF_W = 1.5f;   // corner rings (3 px wide)
 
 // One half of the closed dex. `top` = true: the arch (circle centre) is on its bottom edge.
 static void drawHalf(TFT_eSprite &s, bool top) {
@@ -20,12 +22,15 @@ static void drawHalf(TFT_eSprite &s, bool top) {
   s.fillRect(SCREEN_W - r, top ? 0 : HALF_H - r, r, r, col::BLACK);
   s.fillCircle(r, top ? r : HALF_H - r - 1, r, col::RED);
   s.fillCircle(SCREEN_W - r - 1, top ? r : HALF_H - r - 1, r, col::RED);
-  // two curved decoration grooves near the outer corners, like the prop
-  for (int i = 0; i < 2; i++) {
-    const int rr = 70 + i * 26;
-    s.drawCircle(0, top ? 0 : HALF_H, rr, col::RED_DARK);
-    s.drawCircle(SCREEN_W - 1, top ? 0 : HALF_H, rr, col::RED_DARK);
-  }
+  // two curved decoration grooves near the outer corners, like the prop: 3 px black rings (a 1 px dark-red
+  // line nearly vanished in 8-bit colour). Per pixel, so the ring has no gaps.
+  const int cyCorner = top ? 0 : HALF_H;
+  for (int y = 0; y < HALF_H; y++)
+    for (int x = 0; x < SCREEN_W; x++)
+      for (int cx : {0, SCREEN_W - 1}) {
+        const float d = sqrtf(float((x - cx) * (x - cx) + (y - cyCorner) * (y - cyCorner)));
+        if (fabsf(d - GROOVE_R1) <= GROOVE_HALF_W || fabsf(d - GROOVE_R2) <= GROOVE_HALF_W) s.drawPixel(x, y, col::BLACK);
+      }
   // Pokéball half: white rim, black band, screen colour inside
   s.fillCircle(SCREEN_W / 2, cy, RING_R, col::SILVER);
   s.fillCircle(SCREEN_W / 2, cy, BAND_R, col::BLACK);
@@ -58,7 +63,7 @@ void bootAnimation() {
     tft.setTextDatum(MC_DATUM);
     tft.setTextColor(col::TEXT, col::SCREEN_BG);
     tft.drawString("KALOS DEX", SCREEN_W / 2, SCREEN_H / 2, 4);
-    display::fadeBacklight(BACKLIGHT_NORMAL, 300);
+    display::fadeBacklight(storage::backlightLevel(), 300);
     delay(600);
   } else {
     drawHalf(top, true);
@@ -68,7 +73,7 @@ void bootAnimation() {
     // closed dex, fade the light up
     top.pushSprite(0, 0);
     bottom.pushSprite(0, HALF_H);
-    display::fadeBacklight(BACKLIGHT_NORMAL, 350);
+    display::fadeBacklight(storage::backlightLevel(), 350);
     delay(BOOT_CLOSED_MS);
 
     // slide the halves apart

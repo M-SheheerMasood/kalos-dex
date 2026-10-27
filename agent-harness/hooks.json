@@ -1,0 +1,29 @@
+{
+  "statusLine": {
+    "type": "command",
+    "command": "python3 \"$AGENT_PROJECT_DIR/.agent/statusline.py\""
+  },
+  "hooks": {
+    "PreToolUse": [
+      { "matcher": "*", "hooks": [ { "type": "command", "command": "python3 \"$AGENT_PROJECT_DIR/.agent/hooks/zone_guard.py\"", "timeout": 10 } ] }
+    ],
+    "PostToolUse": [
+      { "matcher": "Write|Edit|MultiEdit", "hooks": [ { "type": "command", "command": "python3 \"$AGENT_PROJECT_DIR/.agent/hooks/events.py\" post_size", "timeout": 10 } ] }
+    ],
+    "UserPromptSubmit": [
+      { "hooks": [ { "type": "command", "command": "python3 \"$AGENT_PROJECT_DIR/.agent/hooks/events.py\" prompt", "timeout": 10 } ] }
+    ],
+    "Stop": [
+      { "hooks": [ { "type": "command", "command": "python3 \"$AGENT_PROJECT_DIR/.agent/hooks/events.py\" stop", "timeout": 15 } ] }
+    ],
+    "PreCompact": [
+      { "hooks": [ { "type": "command", "command": "python3 \"$AGENT_PROJECT_DIR/.agent/hooks/events.py\" pre_compact", "timeout": 10 } ] }
+    ],
+    "SessionStart": [
+      { "hooks": [ { "type": "command", "command": "python3 \"$AGENT_PROJECT_DIR/.agent/hooks/events.py\" session_start", "timeout": 10 } ] }
+    ],
+    "SessionEnd": [
+      { "hooks": [ { "type": "command", "command": "python3 \"$AGENT_PROJECT_DIR/.agent/hooks/events.py\" session_end", "timeout": 10 } ] }
+    ]
+  }
+}

@@ -1,0 +1,80 @@
+{
+  "_about": "Which parts of the project the agent may touch. Checked by .agent/hooks/zone_guard.py before EVERY tool call. Paths are relative to the project root; a path ending in / means the whole folder. Locked zones can't be read, searched, listed recursively or edited until the USER unlocks them (! .agent/zone.sh unlock <zone>); every unlock ends with the session. Read-only zones can be read but not changed. Git pushes/merges/history rewrites and Agent settings files are hard-gated in zone_guard.py itself (not unlockable here). Change this file only with the user (it's in the 'harness' zone).",
+
+  "locked": {
+    "sealed": {
+      "why": "build output, old stuff, the public clone, third-party prop meshes, the scratch Python env - never useful to read",
+      "paths": [
+        ".git/",
+        "public-repo/",
+        ".scratch/venv/",
+        "kalos-dex/_archive/",
+        "kalos-dex/firmware/kalos-dex/.pio/",
+        "kalos-dex/reference/stl/",
+        "kalos-dex/scad/stl/_build/",
+        "kalos-dex/docs/assembly-guide/",
+        "kalos-dex/companion/.venv/"
+      ]
+    },
+    "hardware": {
+      "why": "case, wiring and carrier board are finished (box closed 2026-10-22); facts the firmware needs are in CONTEXT.md and pinout.md",
+      "paths": [
+        "kalos-dex/scad/",
+        "kalos-dex/reference/",
+        "kalos-dex/tools/hardware/",
+        "kalos-dex/docs/hardware/",
+        "kalos-dex/docs/carrier/",
+        "kalos-dex/docs/wiring-diagram/",
+        "public-draft/media/"
+      ]
+    },
+    "history": {
+      "why": "closed session-log volumes; the current state is in CONTEXT.md and the live docs/session-log.md",
+      "paths": [
+        "kalos-dex/docs/log/"
+      ]
+    }
+  },
+
+  "readonly": {
+    "reference": {
+      "why": "fixed facts: pins and the licence",
+      "paths": [
+        "kalos-dex/docs/pinout.md",
+        "LICENSE"
+      ]
+    },
+    "harness": {
+      "why": "the rules, their logs and their tests - the agent can't loosen its own guard or edit its own trace",
+      "paths": [
+        ".agent/zones.json",
+        ".agent/hooks/",
+        ".agent/settings.json",
+        ".agent/zone.sh",
+        ".agent/statusline.py",
+        ".agent/logs/",
+        ".agent/state/journal.jsonl",
+        ".agent/state/history/"
+      ]
+    }
+  },
+
+  "search_roots": [
+    "kalos-dex/firmware/kalos-dex/src",
+    "kalos-dex/firmware/kalos-dex/include",
+    "kalos-dex/tools/*.py",
+    "kalos-dex/docs/*.md",
+    "kalos-dex/*.md",
+    "public-draft/*.md",
+    "public-draft/docs",
+    ".agent/skills"
+  ],
+
+  "bash_allow": [
+    "git -C \"?public-repo\"? (status|add|commit|tag|push|log --oneline)\\b[^;&|]*",
+    "\\bgit (add|commit|mv|rm|status)\\b[^;&|]*",
+    "\\.pio/build/[\\w-]+/firmware\\.(elf|bin|map)\\b",
+    "\\.agent/zone\\.sh status\\b",
+    "\\.scratch/venv/bin/(python3?|pip3?)\\b"
+  ]
+}

@@ -187,6 +187,7 @@ void ClockScreen::render(const struct tm &lt, bool ok) {
       }
       for (int k = 1; k < TEX; k++) memcpy(row + k * SCREEN_W, row, SCREEN_W * 2);
     }
+    screens::blendCorner(s, 0, sy * TEX);   // mute badge fades over the top-right corner
     s.pushSprite(0, sy * TEX);
   }
   s.deleteSprite();

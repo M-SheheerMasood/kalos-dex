@@ -18,6 +18,14 @@ A desk gadget shaped like the expanded Kalos Pokédex: ESP32 DevKit V1, 3.2" ILI
 - **Log every meaningful step** (decision, test result, mistake) so a new session can pick up where the last one stopped.
 - **Ask before installing anything** on the owner's PC.
 
+## Enforced workflow (agent-harness/, docs/agent-workflow.md)
+- **Every task is a step:** plan (2–3 options incl. the smallest, costs, the test) → questions → wait for the owner's answer → build → test. Visual work gets previews first, and side-by-side variants on the device for small choices.
+- **Zones:** locked parts of the project are off limits until the owner unlocks them; ask, say why. Never work around a block. A block you think is wrong: note it in a tally; only after 3 of the same kind propose a fix (pros, cons, how often) – the owner decides.
+- **The harness is the owner's:** never change hooks or zones unless asked and unlocked. Any problem with it goes to the owner first.
+- **Hard gates:** never push, merge, rebase, reset, amend or delete branches/tags; prepare the exact command for the owner to run.
+- **Closing a step:** `step.py check` (all tests, code map fresh, both builds) then `step.py done <id> "what"` – it only commits the tree that passed. New files: ask the owner before adding them.
+- **Learning outcomes:** when a fixed problem taught something, write it down (what happened, what changed, what to do next time).
+
 ## Firmware
 - PlatformIO, `board = esp32dev`, `framework = arduino`, `monitor_speed = 115200`. One code base, two builds: `-e esp32dev` (the gadget) and `-e hwtest` (+ hardware test screens). Both must compile before a commit.
 - All pins and tunables live in `include/config.h`. Pins: docs/pinout.md.

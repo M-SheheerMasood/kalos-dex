@@ -13,7 +13,7 @@ Hardware facts: `docs/pinout.md`, wiring diagram `docs/wiring-diagram/`. Problem
 
 ## 2. Lessons already learned (built in)
 - **USB only, no Wi-Fi.** PC link, time sync and uploads all go over the USB cable (always in the PC). Opening the COM port with DTR/RTS off does **not** reset the board. Close the companion before uploading.
-- **Display:** rotation 2 (header at the top in the case). Keep anything important **≥ 4 px from every edge**. **Backlight PWM ~63 %** (160/255). Draw changes **off-screen first, then push** (no flicker). Big static buffers starve the boot animation of RAM – draw into one shared buffer.
+- **Display:** rotation 2 (header at the top in the case). Keep anything important **≥ 4 px from every edge**, and **≥ 12 px from the top** (`TOP_INSET`: on the desk the case lip hides ~9 rows). **Backlight PWM ~63 %** (160/255). Draw changes **off-screen first, then push** (no flicker). Big static buffers starve the boot animation of RAM – draw into one shared buffer.
 - **Knob:** **polled decoder** (0.5 ms timer) – interrupts lost clicks with this KY-040.
 - **Buttons:** Feed G27, Play G14, Back G26 (internal pull-ups, pressed = LOW). Play/Pause (G35) was **dropped** – G35 and G15 are free.
 - **Strip:** visible-LED map (calibrated in the hwtest build, saved); hidden LEDs always off. **Power limiter**: whole gadget ≤ 450 mA (USB 2 port), measured ~449 mA max with the strip full white in the closed box.
@@ -40,7 +40,7 @@ PlatformIO project `firmware/kalos-dex/` (`esp32dev`, Arduino). **Two builds fro
 | to come | pet sprites + converter (F6b), Dex-entry/PC/Media/Settings screens, more watch faces, companion protocol (F7) |
 
 ## 3b. Decisions from the user
-- **Controls:** knob turn = **PC volume everywhere** (pop-up bar). Knob press = **mute** – and **play/pause moves to the knob** (either knob double-press = play/pause, or knob press on the Media screen = play/pause instead of mute; decide at F7). **Back** = next screen (looping), hold = Home. **Feed / Play** act on the Pet screen; on the Media screen they are previous / next song; on the Clock they switch watch faces (Play hold = fast-day demo for now); Settings: move / change.
+- **Controls (decided 2026-10-22):** knob on **every** screen: turn = **PC volume** (pop-up bar on other screens – to do), **press = play/pause**, **double-press = mute** (user uses play/pause more). Test screens that use the knob keep it. **Back** = next screen (looping), hold = Home. **Feed / Play** act on the Pet screen; on the Media screen they are previous / next song; on the Clock they switch watch faces (Play hold = fast-day demo for now); Settings: move / change.
 - **Clock:** 12 h, UTC+5. Face 1 = square **Minecraft clock** (rotating day/night sky, gold border, iron-sword hour hand, diamond-sword minute hand, ticking red seconds) – accepted "for now". The old round sky dial was archived. 2–3 faces planned.
 - **PC:** Ryzen 5 5600X + RX 6600 XT, music = Spotify. Volume/mute = Windows-wide; play/pause/next/prev = Windows media controls. **Ask before installing anything; only verified software from official sources; the user installs it.**
 - **Pet = a real Pokémon** (user supplies images, personal use), levels up, evolves. Ideas: feed/play, idle mini-battles for XP, sleep at night, capped catch-up while off (never dies), egg hatched by ~5 min of music playing (fallback ~1 h powered), **shiny 1 in 20**, PC-load reactions, mood glow. Sprites → 16-colour palette (~2 KB per 64x64 frame), scaled 2–3x, converter script. **Which Pokémon: still open.**
@@ -49,6 +49,45 @@ PlatformIO project `firmware/kalos-dex/` (`esp32dev`, Arduino). **Two builds fro
 - **Reset pet** in Settings: hold Feed + Play 3 s → new egg (PC keeps a backup).
 - **One build env per Pokémon line** (`pio run -e pet_<name>`): only that line's sprites compiled in; after switching lines the gadget asks keep level / new egg.
 - **PC backup of the pet save** every hour + after hatch / evolution / level-up.
+
+## 3d. Pet design decisions (user, 2026-10-27) – F6b onwards
+- **Line: Honedge → Doublade → Aegislash** (PMD Sprite Collab fan sprites, credited in `assets/sprites-src/CREDITS.md`, git-ignored). Shiny 1 in 20 at hatch (kept).
+- **Public repo: ignored for now** – before the next push, stub or redact the sprites (e.g. the blob fallback) so no sprite data goes public.
+- **Nothing evolves by itself.** When it *can* evolve, a symbol shows; the user confirms (planned: hold Feed + Play) and watches the animation. Same for mega evolutions / form changes later.
+- **Honedge → Doublade at Lv 35.** Stone / trade evolutions get **custom mechanics** instead (e.g. Doublade → Aegislash "Dusk Stone" → at night + fed, or similar) – designed one by one, noted here when decided.
+- **Forms:** Aegislash = Shield normally, Sword while playing. Open for later: small random battles (→ Sword form), mega evolutions with conditions (e.g. food + fun high → a symbol → confirm).
+- **Dex entries:** placeholders now; the user writes the real ones later.
+- **Dex stats page (wanted):** competitive base stats as bars, fixed per stage/form (e.g. Aegislash Sword 140 Atk / 140 SpA, Shield 140 Def / 140 SpD).
+- **Buttons:** Feed + Play are reliable; **Back works as a pressure button (no click) – screens only, never for pet actions**; knob turn/press/double = media everywhere. Pet "big actions" (hatch now, evolve) = **hold Feed + Play** (like Reset pet in Settings).
+- **Hatch:** time set in Settings: 1, 10, 20 … 60 min; instant hatch on Home = hold Feed + Play. **The egg timer is real time (RTC): it keeps counting while the gadget/PC is off.** When the time is up the egg is **ready, not hatched** – it waits for the user (hold Feed + Play) so the hatch is always seen, never in the background (same rule as evolving).
+- **Debug mode (wanted, with S4):** the often-used cheats (hatch, set stats, stage, shiny, fast-forward) in the normal build behind a hidden combo or a Settings "debug" row, so testing doesn't need the hwtest upload every time – if flash allows (it does: ~1 MB free).
+- **Cheats on the gadget (normal build, wanted):** fast-forward and friends, not only the hwtest serial commands – design with S4 (few buttons: Feed, Play, Back = screens only, knob = media). Hatch animation: wobble → small cracks → bigger cracks → white flash → the sprite (+ sparkle if shiny).
+- **Clock demo:** spins one full day (~60 s) then stops by itself; no seconds hand during the demo (it looked backwards = wagon-wheel effect; normal ticking is fine).
+- **Feed / Play act on release** on Home (lets the hand pull back and frees the Feed + Play hold). **Later (user wants to play with it):** tune the delay between the press and the animation – what feels good, not sluggish.
+- **Big moments get a "show" (later, like the games):** hatch / evolution / form change / shiny reveal play as a full-screen moment – everything else (name, level, bars) hidden for its length, a short lead-in that also hides the redraw (today the screen flickers when the stage changes), **not interruptible** except holding the Back button or the safety (watchdog / safe mode).
+- **Sizes:** Aegislash drawn bigger than 3x on Home (it's twice Honedge's height in the games) – user tries sizes on the gadget (`PET SCALE`, hwtest) and picks.
+- **Mood bubbles (S3):** expressive, rounded, filled emote bubbles above the sprite (e.g. the red anger mark with 4 rounded corners) – not thin lines; the user picks the style from previews. **Refusal shake:** slow enough to see, timed like the PMD animations (blends in).
+- **When bubbles show (user, 2026-10-27, first ideas – to try out):** base state = **no bubble**. Mood bubbles stay **as long as the mood lasts**; special ones are timed.
+  - **Hungry:** berry stays on, gently bobbing or fading in/out, until food is back above a set level.
+  - **Tired:** battery until it's back above a set level.
+  - **Gloom:** when two needs are low at once (hungry + low fun), until both are good again.
+  - **Angry:** no feed or play for ~24 h → angry: refuses feed and play (shake + anger mark), the mark flashes faster than the others. **Calming down:** 3 attempts (feed or play), each after a cooldown (~1 min, spam doesn't count) → on the 3rd it accepts, mood back to base.
+  - **Heart (timed):** shows for a while when food and fun are both ≥ 85, then goes away.
+- **Lights and mood (later):** the side glow follows the pet's mood while Home is shown; the roof status LEDs show pet trouble (red = hungry etc.) and stay **off when all is fine**.
+- **UI polish step (user, 2026-10-27, plan before code):** less rigid look on every screen **except the clock**: Food/Fun/Energy/XP bars like the Pokémon HP bars (rounded, black border 2–3x today's); more readable fonts (today's are 1 px wide strokes) – sizes about the same, rounder/cleaner. Big cross-screen change: check every text still fits (nothing off-screen, TOP_INSET / edges), Home, Dex, Music, Settings, overlays.
+  **Done 2026-10-27 (step 08):** Nunito ExtraBold smooth font 12/15/22 px (user's pick of 3, `tools/font_convert.py`, OFL), HP bars with a 2 px black rim (`src/ui.*`), Settings rows as outlined cards; user-checked on every screen.
+- **Follow-ups from the UI step (user, 2026-10-27):**
+  - **Title bar too tight at the bottom:** the "g" of "Aegislash" sits ~1 px above the red bar's end – add a few red rows (user guessed 3–5); pick from side-by-side variants on the gadget, check every screen's layout (Home, Dex, Music, Settings).
+  - **No feed/play spam:** while a feed / play / refusal animation runs, ignore Feed and Play completely (the bar must not go up either) – the next press counts only after the animation ends.
+  - **Mute badge:** redraw it in the new style (it's still the old blocky icon); blink peak 90–95 % opacity, hold ~0.3 s at the peak and ~0.3 s at 0 before fading the other way.
+  - **Pet shadow:** more contrast (mid-dark, TN panel) – later, in the pet art.
+  - Volume pop-up: can't be tested until the PC companion sends volume (knob only sends keys today) – check then in the new style.
+  - **Sleeping mood bubble:** a "z Z z" emote in the same white speech bubble as the other moods (sleeping currently shows no bubble – the sleep animation alone isn't always clear). Fits the bubble rules: shown while the mood is Sleeping.
+  - Title bar: **done in step 09** – band 42 → 44 px + title text 4 px up (`TITLE_Y` 25), mute badge 6 rows up; picked on the gadget. User may still move the text 2 more rows up later (undecided).
+- **Demo mode build (user, 2026-10-27) – LAST, after everything else:** a third firmware env (like `hwtest`, separate from the main build) for showing the gadget away from this PC (power bank / someone else's PC, so no companion – a demo screen instead of Music). Everything to show off on its own: all the cheats on the buttons (hatch, evolve, shiny, stages), all sprite animations, food/fun decay and energy regain sped up so the moods, bubbles, "too full" refusals and angry show quickly, the clock fast-spin demo – a full showcase mode.
+- **Viewing angle (user, 2026-10-27):** the panel is TN – from below/above the colours wash out or darken (orange food bar looks green / dark red, the grey pet shadow nearly vanishes); straight on it looks best. User's choice: **no tilt stand** (buttons + roof LEDs harder to use) → **B: design for TN** in the UI polish step (darker shadow, thicker dark outlines, bar colours that survive the angle, no meaning in subtle shades) + **C: gamma test** (hwtest screen with a few gamma presets for the ILI9341, user picks by eye at the desk angle). Accepting the rest – "I still like it a lot".
+- **Shiny sparkles (later):** several sparkles around the model instead of the single one (user, 2026-10-27).
+- **Evolve-ready badge = blinking "!"** next to the pet. Later maybe different symbols for mega / other form changes.
 
 ## 3c. Pet rules (F6a, built 2026-10-22 – numbers in `config.h`, first guesses, tune after living with it)
 - **Stats 0–100:** food (empty in 14 h awake, half speed asleep), fun (empty in 20 h awake, 2x when hungry, paused asleep), energy (empty in 18 h awake, refills in 8 h asleep). Never dies.
@@ -69,19 +108,22 @@ Back = next screen (looping), hold Back = Home. Offline is normal: companion not
 | ~~Home placeholder~~ (uptime counter "time since boot") | **scrapped** 2026-10-22 | replaced by the pet Home |
 | **Home = pet** | engine **done**, sprites wait for the Pokémon | name + level, small clock + mood, the pet (blob placeholder), what it said, Food / Fun / Energy / XP bars. Feed / Play buttons |
 | **Clock** (Minecraft face) | **kept** (face 1) | more faces later (Feed / Play switch faces). The "fast day" demo (hold Play) moves to the hwtest build at F8 |
-| **Dex entry** (pet details) | planned (replaces the old "Pet stats" idea – Home already has the bars) | Pokédex-style page: species, stage, shiny, age, level + XP to the next evolution, feeds / plays, hatch date |
-| **Media** | F7 | now playing, volume bar; Feed / Play = previous / next song |
+| **Dex entry** (pet details) | **built** 2026-10-23 (2nd screen) | page ENTRY: picture, No. + name, category, types, HT/WT, entry text (all from `pet_line.h`); page TOGETHER: level, XP, evolves at, time together, met, hatched, age, fed, played, nights, shiny, mood. Feed/Play = page |
+| **Music** (was "Media") | **screen + protocol done** 2026-10-22 (tested with `tools/fake_companion.py`); real companion = F7 | spinning Pokéball record (placeholder for album art), scrolling title, artist, progress, prev / play-pause / next icons, volume bar, PC dot. Feed / Play = previous / next song |
 | **PC** | F7 | CPU / GPU temp + load, RAM |
-| **Settings** | F8 | brightness, LED brightness, 12/24 h, reset pet (hold Feed + Play 3 s) |
+| **Settings** | **done** 2026-10-23 | screen + light brightness, night dim (00:15–07:00: screen 40 %, lights 10 %), 12/24 h, knob direction, reset pet (hold Feed + Play 3 s); Feed/Play = row, knob = change |
 | Test screens (Clock test, Input, Lights + calibration, Edges, Info) | **hwtest build only** | unchanged |
 
-Planned order: Home → Clock → Media → PC → Dex entry → Settings.
+Order: Home → Dex → Clock → Music → (PC) → Settings – built: Home, Dex, Clock, Music, Settings.
 
 ## 4b. Locked vs open (2026-10-22)
 **Locked:** hardware + pins · USB only · two builds from one code base · controls (§3b) · 12 h Pakistan time · boot animation · Minecraft clock face 1 · storage A/B + CRC (never move the partitions) · power limiter 450 mA, backlight ≤ 63 % · pet rules above (the numbers can still be tuned) · mood glow colours · red LED = pet needs you, green = PC connected.
-**Open:** which Pokémon line + images (blocks F6b sprites) · play/pause on the knob: double-press or press-on-Media (F7) · egg hatching by music (F7) · mini-battles for XP (idea) · which extra watch faces · companion installs (Python packages, LibreHardwareMonitor – ask first) · Settings contents, night dimming, screensaver (F8) · maybe small album art on Media (fits the budget, see §8).
+**Open:** which Pokémon line + images (blocks F6b sprites) · egg hatching by music (F7) · mini-battles for XP (idea) · which extra watch faces · companion installs (Python packages, LibreHardwareMonitor – ask first) · Settings contents, night dimming, screensaver (F8) · maybe small album art on Media (fits the budget, see §8).
 
 ## 5. PC companion (Python, Windows) – F7
+**Protocol (built on the gadget side, `media.h` / `pclink.h`):** one text line each, 115200 baud, COM port opened with DTR/RTS off.
+PC → gadget: `HELLO <ver>` → `OK HELLO <fw>` · `TRACK <title>\t<artist>` (on change, ASCII only – the companion transliterates; empty = nothing playing) · `STATE playing|paused|stopped <pos s> <dur s>` (every second = also the heartbeat) · `VOL <0-100> <muted 0|1>` · `TIME <unix>`. No message for 4 s → "PC offline", green LED off.
+Gadget → PC: `KEY PLAYPAUSE` · `KEY NEXT` · `KEY PREV` · `KEY MUTE` · `KEY VOL <±clicks>` (bundled, at most one per 80 ms; companion: 2 % per click). Everything else on the port is log text – ignore lines that don't start with `KEY ` / `OK ` / `ERR `.
 - Runs in the background (tray icon later), opens the gadget's COM port (DTR/RTS off), sends `TIME` at start, stats once a second, receives button/knob commands.
 - **Stats:** CPU/GPU temps via **LibreHardwareMonitor** (its web server gives JSON); load / RAM via `psutil`.
 - **Now playing + play/pause/next/prev:** Windows media controls via `winsdk`. **Volume / mute:** `pycaw`.
@@ -107,8 +149,8 @@ Planned order: Home → Clock → Media → PC → Dex entry → Settings.
 - **Time jumps / dead coin cell:** detected (clock-halt bit or date < 2025-10-09) → "time not set" until the PC sends it; pet decay capped and sanity-checked.
 - **PC link drops / companion closed:** "PC offline", nothing blocks; green LED off.
 - **Power:** limiter keeps the gadget ≤ 450 mA; backlight capped.
-- **Boot with a button held** → safe mode (LEDs off) – to do.
-- **Watchdog** – to do.
+- **Boot with Back held, or 3 crashes in a row** → safe mode (no animation, LEDs off) – **done** 2026-10-23 (`system.*`).
+- **Watchdog** 8 s on the loop – **done**, tested with `CRASH` / `PANIC` (hwtest).
 
 ## 8. Memory budget (measured on the device 2026-10-22) – keep it this way
 | What | Size |

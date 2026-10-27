@@ -44,6 +44,18 @@ About two weeks from idea to a closed, working box. These are the main problems,
 - **Saving state.** Also my requirement: the pet's state is saved on the device (2 slots + CRC, so a power cut mid-save can't lose it), with a backup to the PC planned in the companion app, so the ESP32 stays focused on the gadget.
 - **Partition table.** An early layout moved a system partition and the board boot-looped. Fixed and noted in PLAN.md.
 
+## Display and UI (v0.7.0)
+- **The screen is a TN panel.** From my desk angle colours shift: the orange food bar looked green or dark red and the pet's grey shadow nearly vanished. A tilt stand would have made the buttons and roof LEDs harder to use, so I chose to design for it instead. An on-device test card tried gamma presets (no help) and the panel's VCOM setting (big difference); I picked the value by eye. The UI then got deeper colours, thick dark outlines, and nothing that relies on near-white or near-black shades.
+- **Less blocky.** The built-in fonts are 1 px strokes and the bars were thin squares. I compared 3 rounded fonts in real-size previews and picked Nunito ExtraBold, a 2 px rim on Pokémon-style HP bars, and card outlines for the Settings rows. Smooth fonts need a known background colour on this display (it can't be read back), which shaped how every text is drawn.
+- **Title bar.** The bottom of the "g" in the pet's name sat 1 px above the end of the red bar. I stepped through 9 variants on a test screen on the device and picked a mix of two, then nudged it once more by eye.
+- **Reactions not showing.** Feed/play animations never appeared: the start time was taken after the loop's "now", so an unsigned subtraction wrapped around to a huge number. Fixed with a signed, clamped difference.
+- **Flicker.** Blanking an area before redrawing it flickered on every value change; everything now paints over in place.
+
+## Agent workflow (v0.7.0)
+- Rules in a text file weren't enough, so I paused the firmware until the important ones were enforced by hooks (docs/agent-workflow.md).
+- The first guard blocked real work (wildcards inside quotes, running the project's Python environment). Each fix was proposed with pros and cons and only applied after I approved it; the guard's tests grew with every fix (65 → 166 cases). One false block reached 3 hits under my 3-strike rule and got fixed; another is still in the tally.
+- A script once wrote into a locked folder because the guard only checks commands. The agent reported it to me first. Now the guard reads scripts the agent wrote before they run, and the step check fails on any change inside a locked zone until I clear it. Every command from that day was replayed through the old and new guard to check for false blocks first.
+
 ## Testing
 - Each firmware step had its own test before the next one started: serial logs, on-screen test screens (input, lights, screen edges, info) and a separate hardware-test build.
 - Before closing the box: a 10-minute full-power test (strip full white, screen on), then 1 minute again inside the closed case. ~450 mA, no resets, not warm.

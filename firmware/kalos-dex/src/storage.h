@@ -9,10 +9,14 @@ struct Settings {
   uint8_t stripBrightness = STRIP_BRIGHTNESS;
   uint8_t backlight = BACKLIGHT_NORMAL;
   uint8_t watchFace = 0;
-  uint8_t reserved = 0;
+  uint8_t flags = 0;                              // SET_* bits below (was "reserved": same layout, old saves load)
   uint32_t visibleMask = STRIP_VISIBLE_DEFAULT;   // one bit per strip LED: 1 = visible (LED 1 = bit 0)
   uint32_t bootCount = 0;
 };
+
+constexpr uint8_t SET_24H = 1;            // clock shows 24 h instead of 12 h
+constexpr uint8_t SET_NO_NIGHT_DIM = 4;   // night dimming switched OFF (so it is on by default)
+constexpr uint8_t SET_KNOB_FLIP = 2;      // knob the other way round (volume + Settings values; from KNOB_VOL_DIR)
 
 namespace storage {
 // any record (settings, pet, ...): two copies + CRC, see above. size <= 256 bytes.
@@ -31,4 +35,9 @@ uint32_t settingsSeq();
 char settingsSlot();                // 'A', 'B' or '-' (nothing stored yet)
 uint32_t lastSaveMs();
 void nvsUsage(size_t &used, size_t &total);
+
+// settings, ready to use
+inline bool clock24h() { return settings().flags & SET_24H; }
+inline int knobVolDir() { return settings().flags & SET_KNOB_FLIP ? -KNOB_VOL_DIR : KNOB_VOL_DIR; }
+inline uint8_t backlightLevel() { return constrain(settings().backlight, BACKLIGHT_MIN, BACKLIGHT_NORMAL); }
 }  // namespace storage

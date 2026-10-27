@@ -44,6 +44,20 @@ class InfoScreen : public Screen {
   uint32_t lastDraw = 0;
 };
 
+// Display: try gamma presets + VCOM on this TN panel (colours shift with the viewing angle, PLAN §3d).
+// Feed / Play = preset, knob = VCOM; the pattern shows what drifts (grey + RGB ramps, the Home bars, pet + shadow).
+class DisplayScreen : public Screen {
+ public:
+  const char *name() const override { return "Display"; }
+  void enter() override;
+  void leave() override;
+  bool onEvent(const InputEvent &e) override;
+ private:
+  void apply();
+  void draw();
+  int preset = 0, vcom = -1;   // vcom -1 = the preset's own value
+};
+
 class ClockTestScreen : public Screen {
  public:
   const char *name() const override { return "Clock test"; }

@@ -11,6 +11,8 @@ void begin() {
   setBacklight(0);  // stay dark until something is drawn
   tft.init();
   tft.setRotation(DISPLAY_ROTATION);
+  tft.writecommand(0xC7);   // VCOM offset: the library's gamma, the user's contrast (hwtest Display screen)
+  tft.writedata(DISPLAY_VCOM);
   tft.fillScreen(TFT_BLACK);
 }
 

@@ -28,6 +28,7 @@ void setVisibleMask(uint32_t m);
 void calibrate(int i);                     // >= 0: light ONLY LED i (white); -1: back to normal
 
 void begin();
+void setSafe(bool on);                     // safe mode: strip + status LEDs stay off
 void update(uint32_t now);                 // call every loop
 
 }  // namespace leds
