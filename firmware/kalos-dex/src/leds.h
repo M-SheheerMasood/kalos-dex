@@ -15,6 +15,7 @@ const char *effectName(Effect e);
 void setEffect(Effect e, uint32_t colour = 0xFFB040, uint16_t periodMs = 3000);  // colour = 0xRRGGBB
 void flash(uint32_t colour, uint16_t ms);  // short overlay (level-up, feed, ...) on top of the effect
 void flashRainbow(uint16_t ms);            // same, a fast rainbow ripple (play, level-up)
+void extendFlash(uint32_t untilMs);        // make a running flash last until untilMs (millis) – e.g. the whole reaction
 void setBrightness(uint8_t b);             // 0..255, before the power limiter
 uint8_t brightness();
 int stripMilliamps();                      // estimated current of the lit LEDs this frame

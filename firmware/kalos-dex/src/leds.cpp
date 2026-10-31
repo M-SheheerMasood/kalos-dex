@@ -46,6 +46,10 @@ const char *effectName(Effect e) { return EFFECT_NAMES[(int)e]; }
 void setEffect(Effect e, uint32_t colour, uint16_t periodMs) { effect = e; effColour = colour; effPeriod = max<uint16_t>(periodMs, 200); }
 void flash(uint32_t colour, uint16_t ms) { flashColour = colour; flashRb = false; flashUntil = millis() + ms; }
 void flashRainbow(uint16_t ms) { flashRb = true; flashUntil = millis() + ms; }
+void extendFlash(uint32_t untilMs) {   // a running flash lasts at least until untilMs (never starts one)
+  const uint32_t now = millis();
+  if ((int32_t)(flashUntil - now) > 0 && (int32_t)(untilMs - flashUntil) > 0) flashUntil = untilMs;
+}
 void setBrightness(uint8_t b) { userBrightness = b; }
 uint8_t brightness() { return userBrightness; }
 int stripMilliamps() { return lastMa; }

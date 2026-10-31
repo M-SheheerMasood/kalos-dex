@@ -1,6 +1,16 @@
 # Changelog (firmware)
 Newest first. Version = `FW_VERSION` in `firmware/kalos-dex/platformio.ini`; each one is tagged in git (`v0.6.0`, ...) from v0.6.0 on. Problems and fixes: `docs/build-notes.md`.
 
+## 0.8.0 – 2026-10-31
+Hatching, evolving and the Dex STATS page, each step tested on the gadget.
+- Hatching (2026-10-29): hatch time in Settings (1, 10 … 60 min, new page 2), real time (counts while switched off); the egg waits when ready (hops) until Feed + Play are held 3 s; hatch show: cracks + rocking, whole screen white, the new pet fades in with full bars, a hop and a heart, awake for 5 min. Home bars are drawn off-screen (no jitter).
+- Debug mode (2026-10-29): a Settings row turns on a test pet (a copy, never saved; off brings the real pet back) and a Debug screen with the usual cheats (egg, stage, shiny, bars, level, skip time, angry). Feed / Play can't be spammed during a reaction's glow.
+- Dex STATS page (2026-10-31): base stats as bars in pokemondb's colours, an extra page for a second form (Aegislash Blade). Settings: on/off rows follow the knob's direction (no more cancelled twists), "Remember page"; Back is ignored while a screen switches.
+- Evolving (2026-10-31): a blinking "!" when the pet can evolve; hold Feed + Play 3 s for the evolution show (dark screen, white silhouettes swapping, white flash, the new form shows off under confetti). Generic for any Pokémon line: the evolve level and an optional show-off move per form are data. Debug: "evolve Lv".
+- Pet balance (2026-10-31): every feed / play gives 10 XP, levels need 30 + n XP (about 1.5 weeks to Lv 50–55 with normal care), food drops faster by day and keeps dropping at night (hungry in the morning), fun drops a little at night.
+- Placeholder line: Bloblin's made-up base stats show one bar in each of the 6 colours (the public STATS render).
+- Workflow: the public build script stops on any flag it doesn't know, and the agent's guard only lets it build a preview until the owner unlocks the public copy; the guard's "prints files" rule only matches real git commands (206 test cases).
+
 ## 0.7.0 – 2026-10-27
 Includes the 2026-10-22 work in the next section, plus (2026-10-27, built with the new step workflow, each step tested on the gadget):
 - Pet sprites: one Pokémon line per build from a converter (`tools/sprite_convert.py`, 4-bit, normal + shiny palette); the sprite data is generated locally and never committed – without it the build falls back to the placeholder blob line. Nothing evolves on its own any more (evolution waits for the owner).

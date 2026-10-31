@@ -287,6 +287,29 @@ def strip_data_heredocs(c):
     return "\n".join(out)
 
 
+def quoted_heredoc_bodies(c):
+    """(start, end) offsets of the bodies of QUOTED heredocs (<<'X' / <<"X"). The shell never expands a `*` in them, so
+    they are skipped by the wildcard check only (H4, 2026-10-28); unquoted ones can run $(...) and stay checked."""
+    out, pos, lines = [], 0, c.split("\n")
+    starts = []
+    for ln in lines:
+        starts.append(pos)
+        pos += len(ln) + 1
+    i = 0
+    while i < len(lines):
+        m = HEREDOC.search(lines[i])
+        i += 1
+        if not m:
+            continue
+        end = i
+        while end < len(lines) and (lines[end].lstrip("\t") if m.group(1) else lines[end]) != m.group(3):
+            end += 1
+        if end > i:
+            out.append((starts[i], starts[end] if end < len(lines) else len(c)))
+        i = end
+    return out
+
+
 INTERP = re.compile(r"^(python[\d.]*|python\.exe|bash|sh|zsh|node|perl|ruby)$")
 
 
@@ -333,6 +356,38 @@ def check_script(path, locked, cwd, allow=()):
     return None
 
 
+def check_git_print(c, locked):
+    """git show / git log -p print file contents: without a path they could print locked files. Only REAL git runs count
+    - git as the command word of a piece (also inside $( ) / backticks), not words inside quoted heredoc text or a grep
+    pattern (H5, 2026-10-29: notes and searches that quoted the words were blocked 4 times). git show <rev>:<file>
+    prints just that file: allowed when the file isn't in a locked zone."""
+    for s, e in reversed(quoted_heredoc_bodies(c)):
+        c = c[:s] + c[e:]
+    pieces = segments(c) + [m.group(1) or m.group(2) for m in re.finditer(r"\$\(([^()]*)\)|`([^`]*)`", c)]
+    for seg in pieces:
+        seg = re.sub(r"\s\d*>>?&?\s*\S+", " ", seg)   # redirections (> file, 2>&1) aren't git arguments
+        tok = [t for t in tokens(seg) if not re.match(r"^\w+=", t)]
+        if not tok or os.path.basename(tok[0]) not in ("git", "git.exe"):
+            continue
+        rest, i = tok[1:], 0
+        while i < len(rest) and rest[i].startswith("-"):   # git -C dir / -c key=val / --no-pager ...
+            i += 2 if rest[i] in ("-C", "-c") else 1
+        sub, args = (rest[i], rest[i + 1:]) if i < len(rest) else ("", [])
+        if sub not in ("show", "log"):
+            continue
+        objs = [a for a in args if not a.startswith("-")]
+        if sub == "show" and objs and all(":" in a for a in objs):   # git show HEAD:path/file
+            for a in objs:
+                hit = check_path(a.split(":", 1)[1].lstrip("./") or ".", "read", locked, {})
+                if hit:
+                    return hit
+            continue
+        printing = sub == "show" or any(a in ("-p", "--patch", "-u") for a in args)
+        if printing and not (set(args) & {"--", "--stat", "--name-only"} or args[-1:] == ["--oneline"]):
+            return "git log -p / git show without a path could print locked files - add '-- <path>' or --stat"
+    return None
+
+
 def check_bash(cmd, cwd, locked, readonly, roots, allow):
     c = cmd.replace("\\", "/")
     c = re.sub(re.escape(WIN_ROOT), ROOT, c, flags=re.I)
@@ -346,15 +401,31 @@ def check_bash(cmd, cwd, locked, readonly, roots, allow):
     c = strip_data_heredocs(c)
     if re.search(r"\bstep\.py[\"']?\s+check\s+--zones-ok\b", c):   # the run itself, not a mention (commit messages)
         return "only the user confirms changes inside locked zones (! python3 kalos-dex/tools/step.py check --zones-ok <zone>)"
+    if "sealed" in locked:   # the public build writes into the sealed public clone unless it's a preview (2026-10-29:
+        for seg in segments(c):   # a run with an unknown flag did exactly that) - a mention (grep, cat) is fine
+            tok = [t for t in tokens(seg) if not re.match(r"^\w+=", t)]   # skip VAR=x before the command
+            runs = tok and re.search(r"(^|/)(python[0-9.]*(\.exe)?|env|exec|timeout)$", tok[0])
+            for i, t in enumerate(tok):
+                if t.endswith("build_public.py") and (i == 0 or runs):
+                    args = [a for a in tok[i + 1:] if not re.match(r"^\d*>", a)]   # 2>&1, > log
+                    if not (args[:1] == ["--out"] or args[:1] in (["-h"], ["--help"])):
+                        return ("build_public.py without --out writes into the sealed public clone - use --out <dir> for a"
+                                " preview, or ask the user to unlock 'sealed' to publish")
     for a in allow:
         c = a.sub(" ", c)
     for name, z, rx in mention_patterns(locked, cwd):
         if rx.search(c):
             return "the command touches '%s' in the locked zone '%s'" % (z, name)
-    if re.search(r"\bgit\b[^;&|\n]*\s(show|log\b[^;&|\n]*\s(-p|--patch|-u))", c) and not re.search(r"\s--\s|--stat|--name-only|--oneline\s*$", c):
-        return "git log -p / git show without a path could print locked files - add '-- <path>' or --stat"
-    run_dir = cwd
+    hit = check_git_print(c, locked)
+    if hit:
+        return hit
+    bodies = quoted_heredoc_bodies(c)
+    run_dir, pos = cwd, 0
     for seg in segments(c):
+        at = c.find(seg, pos)
+        if at >= 0:
+            pos = at + len(seg)
+        in_body = at >= 0 and any(a <= at < b for a, b in bodies)   # text inside a quoted heredoc
         s = seg.strip()
         m = re.match(r"^cd\s+(.+)$", s)
         if m:
@@ -375,8 +446,11 @@ def check_bash(cmd, cwd, locked, readonly, roots, allow):
                     return hit
         # wildcards that would expand into a locked zone - only UNQUOTED words, because only those does the shell
         # expand (a quoted regex like 's/.*/x/' is text for sed/grep/python, not a file pattern)
-        unquoted = [w for w in re.findall(r"(?:[^\s'\"]|\\.)+|'[^']*'|\"[^\"]*\"", s)[1:] if not w.startswith(("'", '"'))]
+        # (and never inside a quoted heredoc: the shell doesn't expand there - H4, 2026-10-28)
+        unquoted = [] if in_body else \
+            [w for w in re.findall(r"(?:[^\s'\"]|\\.)+|'[^']*'|\"[^\"]*\"", s)[1:] if not w.startswith(("'", '"'))]
         for t in unquoted:
+            t = re.sub(r"^[$(`]+|[)`]+$", "", t)   # `*)` from `$(ls *)` is the pattern `*` (G1, 2026-10-28)
             if GLOB_CH.search(t) and not t.startswith("-"):
                 for p in expand(t, run_dir):
                     hit = check_path(to_rel(p, run_dir), "read", locked, {})

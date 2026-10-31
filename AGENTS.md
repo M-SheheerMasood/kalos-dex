@@ -30,6 +30,9 @@ A desk gadget shaped like the expanded Kalos Pokédex: ESP32 DevKit V1, 3.2" ILI
 - PlatformIO, `board = esp32dev`, `framework = arduino`, `monitor_speed = 115200`. One code base, two builds: `-e esp32dev` (the gadget) and `-e hwtest` (+ hardware test screens). Both must compile before a commit.
 - All pins and tunables live in `include/config.h`. Pins: docs/pinout.md.
 - **Memory budget (PLAN.md §8):** no PSRAM, biggest free block ~107 KB. Never a 16-bit full-screen buffer; big buffers only while their screen is shown. Log free RAM / biggest block after every screen change.
+- **Per-Pokémon modularity:** the firmware will be built for other Pokémon lines. Anything specific to one line (evolve levels, forms, a show-off move per form, art) is data in `pet_line.h` or the converter's table, with a generic fallback in the engine. Every plan that touches the pet says what it costs per new line / stage / evolution and what happens when that data is missing.
+- **Nothing hatches or evolves without the owner** (hold Feed + Play). Test on the debug test pet, not the real one.
+- **Read a script's code to learn its options; never run it just to see them** (a build script once ran for real when given a flag it didn't know).
 
 ## Case (OpenSCAD)
 - Parametric, variables at the top with plain explanations. One part per STL, named `colour_part_xQTY.stl`.

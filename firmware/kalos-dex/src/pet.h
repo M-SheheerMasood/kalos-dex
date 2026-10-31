@@ -25,7 +25,8 @@ bool asleep();
 float food(), fun(), energy();
 uint8_t level();
 uint32_t xp(), xpNeeded();     // XP inside the current level / needed for the next
-uint32_t eggSecondsLeft();
+uint32_t eggSecondsLeft();      // until the egg is ready (0 = ready or hatched)
+bool eggReady();               // egg whose time is up: waits for the user to hatch it
 const char *message();         // last thing that happened ("Yum!", "I'm full!", ...) – "" when none
 uint32_t messageAt();          // millis() of that message
 uint32_t version();            // goes up whenever anything shown on screen changes
@@ -38,10 +39,22 @@ uint16_t nights();             // nights slept
 uint8_t nextEvolveLevel();     // 0 = final form (or egg)
 
 void holdGlow(bool hold);      // test screens borrow the strip + status LEDs; false = give them back
+void showGlow(Mood m);         // hwtest: show this mood's glow (use with holdGlow(true))
 void reset();                  // new egg (Settings later: hold Feed + Play 3 s)
 void printStatus();            // serial "PET"
 
-// testing (serial commands in the hwtest build)
+// Debug mode (Settings page 2, user 2026-10-29): on = the pet becomes a TEST copy (cheats change only the copy, nothing
+// is saved); off = the real pet is loaded again from its save, catching up the time. Always off after a restart.
+void setTestMode(bool on);
+bool testMode();
+bool canEvolve();                     // its level allows the next form: "!" on Home, hold Feed + Play
+void evolveNow();                     // the user confirmed: next form (the show is Home's)
+bool evolveReadyNow();                // Debug: level = the next form's level (false: none / already)
+void eggReadyNow();                   // egg: time's up (hatch it on Home to see the show)
+void levelUp();                       // +1 level
+void calmDown();                      // counts as cared for just now (no longer angry)
+
+// testing (Debug screen + serial commands in the hwtest build)
 void skipMinutes(uint32_t minutes);   // pretend it was switched off this long (same catch-up as at boot)
 void addXp(uint32_t n);
 void hatchNow();

@@ -28,6 +28,11 @@ systematic-debugging – cut down to what this project needs.
      buffer, sprites created in `enter()` and freed in `leave()`), flash vs the 1.4 MB app limit.
    - Layout: nothing important within `TOP_INSET` (12 px) of the top or 4 px of the other edges.
    - Art stays placeholder and modular (`pet_line.h` data, `pet_art.*` drawing) unless told otherwise.
+   - **Per-Pokémon cost (user, 2026-10-31 – every pet / art / evolution plan):** later firmwares will be other
+     Pokémon lines. Keep line-specific choices as **data** (`pet_line.h`, the converter's per-line table, generated
+     headers) with a **generic fallback** in the engine when a line lacks it (an animation, a form, a rule). Say in
+     the plan what the choice costs **per new line / stage / evolution** (art, a config line, code) and what happens
+     when it's missing (falls back to X / breaks). If something looks better now but adds per-line work, say so.
    - Tokens/time when the work is big (e.g. a simulator).
 5. **Design work** (clock faces, screen layouts, anything the user will look at): show, don't describe –
    offer a PNG preview (`.scratch/venv/bin/python` + Pillow, e.g. `tools/clock_preview.py`) or a published page with

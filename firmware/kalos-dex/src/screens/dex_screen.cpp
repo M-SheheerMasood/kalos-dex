@@ -5,8 +5,13 @@
 #include "pet_line.h"
 #include "pet_art.h"
 #include "timekeeper.h"
+#include "storage.h"
 
-static constexpr int PAGES = 2;
+// pages: ENTRY, TOGETHER, STATS (+ STATS of the second form, e.g. Aegislash Blade); an egg has no stats
+static int pages() {
+  if (!pet::hatched()) return 2;
+  return PET_LINE.stage[pet::stage() - 1].altForm ? 4 : 3;
+}
 static constexpr int PIC = 112, PIC_X = SAFE_MARGIN + 4, PIC_Y = TOP_BAND_H + 8;   // picture box
 static constexpr int INFO_X = PIC_X + PIC + 10;                                       // right column
 static constexpr int TEXT_Y = PIC_Y + PIC + 8, TEXT_H = 84;                           // entry text box
@@ -76,13 +81,14 @@ void DexScreen::drawHeader() {   // "No.901  Blobbit" (egg: "No.???  Egg")
 static void drawFooter(int page) {
   const int y = SCREEN_H - SAFE_MARGIN - 8;
   tft.fillRect(0, y - 9, SCREEN_W, 18, col::SCREEN_BG);   // = the font's line
-  for (int i = 0; i < PAGES; i++) {
-    const int x = SCREEN_W / 2 - 8 + i * 16;
+  const int n = pages();
+  for (int i = 0; i < n; i++) {
+    const int x = SCREEN_W / 2 - (n - 1) * 8 + i * 16;
     if (i == page) tft.fillCircle(x, y, 4, col::RED); else tft.drawCircle(x, y, 4, col::SCREEN_DARK);
   }
   tft.setTextColor(col::SCREEN_DARK, col::SCREEN_BG);
   tft.setTextDatum(ML_DATUM);
-  ui::text(tft, page == 0 ? "ENTRY" : "TOGETHER", SAFE_MARGIN + 6, y, ui::BODY);
+  ui::text(tft, page == 0 ? "ENTRY" : page == 1 ? "TOGETHER" : "STATS", SAFE_MARGIN + 6, y, ui::BODY);
   tft.setTextDatum(MR_DATUM);
   ui::text(tft, "Feed / Play", SCREEN_W - SAFE_MARGIN - 6, y, ui::BODY);
 }
@@ -170,9 +176,8 @@ void DexScreen::drawTogether() {
     snprintf(add("Hatches in"), 28, "%lu min", (unsigned long)(pet::eggSecondsLeft() + 59) / 60);
   }
   fmtSpan(add("Together"), 28, pet::togetherS());
-  fmtDate(add("Met"), 28, pet::metUtc());
+  fmtDate(add(h ? "Met/Hatched" : "Met"), 28, pet::metUtc());   // one row, the day only (same day with a 1-60 min egg)
   if (h) {
-    fmtDate(add("Hatched"), 28, pet::hatchedUtc());
     if (pet::hatchedUtc() && timekeeper::valid()) {
       const uint32_t days = (timekeeper::nowUtc() - pet::hatchedUtc()) / 86400;
       snprintf(add("Age"), 28, "%lu day%s", (unsigned long)days, days == 1 ? "" : "s");
@@ -201,9 +206,48 @@ void DexScreen::drawTogether() {
   }
 }
 
+// ---- page 3 (+4): base stats as bars in pokemondb's colours (user, 2026-10-31): bar = stat / 180, colour by rank
+static uint16_t statColour(int v) {   // pokemondb barchart-rank-1..6 (its stylesheet): steps of 30
+  static const uint16_t C[6] = {rgb(243, 68, 68), rgb(255, 127, 15), rgb(255, 221, 87), rgb(160, 229, 21),
+                                rgb(35, 205, 94), rgb(0, 194, 184)};   // red, orange, yellow, lime, green, turquoise
+  return C[min(v / 30, 5)];
+}
+
+void DexScreen::drawStats(bool alt) {
+  const PetStage &s = PET_LINE.stage[pet::stage() - 1];
+  const uint8_t *v = alt ? s.altStats : s.stats;
+  static const char *LABEL[6] = {"HP", "Attack", "Defense", "Sp. Atk", "Sp. Def", "Speed"};
+  static constexpr int Y0 = TOP_BAND_H + 28, RH = 26, BX = 112, BW = SCREEN_W - SAFE_MARGIN - 6 - BX;
+  tft.setTextColor(col::SCREEN_DARK, col::SCREEN_BG);
+  tft.setTextDatum(MC_DATUM);
+  ui::text(tft, alt ? s.altForm : s.form ? s.form : "Base stats", SCREEN_W / 2, TOP_BAND_H + 12, ui::BODY);
+  int total = 0;
+  for (int i = 0; i < 6; i++) total += v[i];
+  if (!total) { ui::text(tft, "no data", SCREEN_W / 2, Y0 + 60, ui::BODY); return; }
+  char buf[8];
+  tft.setTextColor(col::TEXT, col::SCREEN_BG);
+  for (int i = 0; i < 6; i++) {
+    const int y = Y0 + i * RH;
+    tft.setTextDatum(ML_DATUM);
+    ui::text(tft, LABEL[i], SAFE_MARGIN + 6, y + 6, ui::BODY);
+    snprintf(buf, sizeof buf, "%u", v[i]);
+    tft.setTextDatum(MR_DATUM);
+    ui::text(tft, buf, BX - 8, y + 6, ui::BODY);
+    ui::hpBar(tft, BX, y, BW, 12, min(1.f, v[i] / 180.f), statColour(v[i]));
+  }
+  const int y = Y0 + 6 * RH + 4;
+  tft.drawFastHLine(SAFE_MARGIN + 6, y - 2, SCREEN_W - 2 * SAFE_MARGIN - 12, rgb(150, 180, 205));
+  tft.setTextDatum(ML_DATUM);
+  ui::text(tft, "Total", SAFE_MARGIN + 6, y + 8, ui::BODY);
+  snprintf(buf, sizeof buf, "%d", total);
+  tft.setTextDatum(MR_DATUM);
+  ui::text(tft, buf, BX - 8, y + 8, ui::BODY);
+}
+
 void DexScreen::drawPage() {
   tft.fillRect(0, TOP_BAND_H, SCREEN_W, SCREEN_H - TOP_BAND_H - 18, col::SCREEN_BG);
-  if (page == 0) drawEntry(); else drawTogether();
+  if (page >= pages()) page = 0;   // e.g. it evolved out of a form with an extra page
+  if (page == 0) drawEntry(); else if (page == 1) drawTogether(); else drawStats(page == 3);
   drawFooter(page);
   shownVersion = pet::version();
   struct tm lt;
@@ -211,6 +255,7 @@ void DexScreen::drawPage() {
 }
 
 void DexScreen::enter() {
+  if (!storage::rememberPage()) page = 0;   // opens on ENTRY unless Settings "Remember page" is on (user, 2026-10-31)
   tft.fillScreen(col::SCREEN_BG);
   pic.setColorDepth(16);
   row.setColorDepth(16);
@@ -229,6 +274,9 @@ void DexScreen::update(uint32_t now) {
     shownVersion = pet::version();
     drawHeader();
     drawEntry();
+  } else if (pet::version() != shownVersion && page >= 2) {   // stage / form may have changed
+    drawHeader();
+    drawPage();
   } else if ((pet::version() != shownVersion || minute != shownMinute) && page == 1) {
     shownVersion = pet::version();
     shownMinute = minute;
@@ -239,7 +287,7 @@ void DexScreen::update(uint32_t now) {
 
 bool DexScreen::onEvent(const InputEvent &e) {
   if (e.type != Ev::Press || (e.button != Btn::Feed && e.button != Btn::Play)) return false;
-  page = (page + (e.button == Btn::Play ? 1 : PAGES - 1)) % PAGES;
+  page = (page + (e.button == Btn::Play ? 1 : pages() - 1)) % pages();
   drawPage();
   return true;
 }

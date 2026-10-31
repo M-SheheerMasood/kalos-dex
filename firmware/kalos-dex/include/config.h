@@ -34,6 +34,7 @@ constexpr uint8_t BACKLIGHT_NORMAL = 160; // 0..255 (~63 %): full brightness hea
 constexpr uint8_t BACKLIGHT_MIN = 16;     // Settings can dim down to 10 % of that
 constexpr int BACKLIGHT_PWM_CHANNEL = 0;
 constexpr uint16_t SCREEN_FADE_MS = 90;   // backlight dip used to hide screen changes
+constexpr uint16_t SCREEN_LOCK_MS = 250;  // Back ignored this long after a screen appeared (+ presses queued while switching)
 constexpr uint16_t BOOT_CLOSED_MS = 600;  // boot: closed Pokédex shown before it opens
 constexpr uint16_t BOOT_OPEN_MS = 2200;   // boot: how long the halves take to slide apart (user: slower, twice)
 
@@ -55,16 +56,26 @@ constexpr float IDLE_MA_PER_LED = 1.0f;
 constexpr float MA_PER_CHANNEL = 20.0f;   // one colour channel of one LED at full
 
 // ---- pet (F6) – stats go 0..100; "hours" = how long a full stat takes to run out
-constexpr float PET_HUNGER_HOURS = 14;       // food 100 -> 0 while awake (half as fast asleep)
+// balance (user, 2026-10-31, .scratch/previews/balance/balance_sim.py): a normal owner (5 check-ins a day) reaches
+// Lv 35 in ~6 days and Lv 50-55 in ~10-11 days; the pet wakes up hungry and a little less happy
+constexpr float PET_HUNGER_HOURS = 11;       // food 100 -> 0 while awake (was 14)
+constexpr float PET_NIGHT_FOOD = 0.9f;       // asleep: food drops at this part of the day speed (was 0.5)
+constexpr float PET_NIGHT_FUN = 0.25f;       // asleep: fun drops at this part of the day speed (was paused)
 constexpr float PET_SAD_HOURS = 20;          // fun 100 -> 0 while awake (twice as fast when hungry, paused asleep)
-constexpr float PET_TIRED_HOURS = 18;        // energy 100 -> 0 while awake
+constexpr float PET_TIRED_HOURS = 18;        // energy 100 -> 0 while awake AND hungry (food < PET_HUNGRY_AT)
+constexpr float PET_AWAKE_REST_HOURS = 15;   // energy 0 -> 100 while awake and not hungry (user, 2026-10-28)
+constexpr float PET_HUNGRY_AT = 25;          // food below this = hungry (mood, fun drains 2x, energy drains)
 constexpr float PET_REST_HOURS = 8;          // energy 0 -> 100 while asleep
 constexpr int PET_SLEEP_FROM = 23;           // local hour it falls asleep ...
 constexpr int PET_SLEEP_TO = 7;              // ... and wakes up (only when the time is known)
 constexpr uint32_t PET_WAKE_MS = 10UL * 60 * 1000;   // a button press at night wakes it for 10 min
 constexpr uint32_t PET_CATCHUP_MAX_S = 48UL * 3600;  // time switched off counts at most 48 h
 constexpr float PET_CATCHUP_FLOOR = 10;      // time off never pushes a stat below this (it never dies)
-constexpr uint32_t PET_EGG_SECONDS = 3600;   // egg hatches after 1 h switched on (music hatching comes with F7)
+constexpr uint8_t PET_HATCH_MIN_DEFAULT = 60;   // egg is ready after this (Settings "Hatch time": 1, 10 .. 60 min),
+                                                // real time (counts while switched off); it hatches only when the user
+                                                // holds Feed + Play on Home (S4, user 2026-10-29)
+constexpr uint32_t PET_HATCH_HOLD_MS = 3000;    // hold Feed + Play this long = hatch
+constexpr uint32_t PET_FRESH_MS = 5UL * 60 * 1000;   // a new hatchling stays awake this long, even at night
 constexpr uint8_t PET_SHINY_ONE_IN = 20;
 constexpr uint32_t PET_ANGRY_AFTER_S = 24UL * 3600;   // no accepted feed / play this long (real time) -> angry
 constexpr uint8_t PET_CALM_TRIES = 3;                 // angry: the 3rd counted try is accepted ...
@@ -72,11 +83,13 @@ constexpr uint32_t PET_CALM_TRY_MS = 60UL * 1000;     // ... and a try counts on
 constexpr uint32_t PET_SAVE_EVERY_MS = 3UL * 60 * 1000;   // + 3 s after every feed / play
 // actions
 constexpr float PET_FEED_FOOD = 30, PET_FEED_FUN = 3, PET_FULL_AT = 90;   // refuses food at >= 90
+constexpr uint32_t PET_FEED_GLOW_MS = 600, PET_PLAY_GLOW_MS = 800;   // green / rainbow flash; Feed / Play wait for it too
+constexpr float PET_FEED_ENERGY = 10;        // food gives a little energy too (user, 2026-10-28)
 constexpr float PET_PLAY_FUN = 15, PET_PLAY_ENERGY = 8, PET_PLAY_FOOD = 3, PET_TOO_TIRED = 15;
 // XP: level n -> n+1 needs PET_XP_BASE + PET_XP_STEP * n
-constexpr uint32_t PET_XP_BASE = 10, PET_XP_STEP = 5;
-constexpr uint32_t PET_XP_FEED = 5;          // only when food was below 70 (no XP farming)
-constexpr uint32_t PET_XP_PLAY = 8;          // only when fun was below 90
+constexpr uint32_t PET_XP_BASE = 30, PET_XP_STEP = 1;   // (was 10 + 5n: Lv 35 took > 2 weeks)
+constexpr uint32_t PET_XP_FEED = 10;         // every accepted feed (refused at food >= 90: no farming)
+constexpr uint32_t PET_XP_PLAY = 10;         // every accepted play (costs energy: ~10 in a row at most)
 constexpr uint32_t PET_XP_CONTENT_S = 600;   // +1 XP per 10 min awake with every stat >= 50
 constexpr uint8_t PET_MAX_LEVEL = 100;
 
@@ -87,8 +100,9 @@ constexpr int MEDIA_VOL_PER_CLICK = 2;       // shown at once; the companion use
 constexpr uint32_t MEDIA_VOL_SEND_MS = 80;   // knob clicks are bundled: at most one KEY VOL line per 80 ms
 constexpr uint32_t MEDIA_LOCAL_VOL_MS = 800;
 constexpr uint32_t VOL_POPUP_MS = 1500;
-constexpr uint32_t MUTE_PULSE_MS = 2400;     // mute badge: one slow fade in + out
-constexpr uint8_t MUTE_ALPHA_MAX = 190;      // never fully solid (255): the screen behind stays visible      // volume pop-up (top band, every screen but Music) stays this long // after a knob turn, ignore the PC's (older) volume this long
+constexpr uint32_t MUTE_FADE_MS = 900;       // mute badge: fade up / down this long ...
+constexpr uint32_t MUTE_HOLD_MS = 300;       // ... and hold this long at the peak and at 0 (one blink = 2.4 s)
+constexpr uint8_t MUTE_ALPHA_MAX = 235;      // ~92 % at the peak (user: 90-95 %); never fully solid      // volume pop-up (top band, every screen but Music) stays this long // after a knob turn, ignore the PC's (older) volume this long
 
 // ---- safety
 constexpr uint32_t WATCHDOG_S = 8;             // loop stuck this long -> restart (longest normal block: ~0.1 s)

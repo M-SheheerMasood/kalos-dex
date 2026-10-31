@@ -21,7 +21,7 @@ The harness is a few of those scripts plus a step tool:
 | Piece | What it does |
 |---|---|
 | **Zones** (`zones.json`) | The project is split into zones. *Locked* zones (finished hardware, old archives, build output, the public repo folder, closed log volumes) can't be read, searched or edited. *Read-only* zones (the harness itself, reference docs) can be read but not changed. |
-| **Zone guard** (`hooks/zone_guard.py`) | Runs before **every** tool call. Checks file paths, search roots and shell commands (including wildcards that could expand into a locked folder) against the zones, and denies with a reason. Before a script the agent wrote runs, its text gets the same check. Fails closed: if the guard itself breaks, tools are denied. 167 test cases. |
+| **Zone guard** (`hooks/zone_guard.py`) | Runs before **every** tool call. Checks file paths, search roots and shell commands (including wildcards that could expand into a locked folder) against the zones, and denies with a reason. Before a script the agent wrote runs, its text gets the same check. Fails closed: if the guard itself breaks, tools are denied. 206 test cases. |
 | **Unlocking** (`zone.sh`) | Only I can unlock a zone, by typing the command myself. The agent has to ask, say why, and wait. |
 | **Hard gates** | Some commands are denied no matter what: git push / merge / pull / rebase / reset --hard / amend, deleting branches or tags, turning hooks off, editing the agent's settings. The agent prepares the exact line, and I run it. |
 | **Trace** | Every tool call is logged (time, session, which agent or sub-agent, tool, target, allowed or denied, which rule). |
@@ -37,7 +37,8 @@ The harness was built in small steps, each one planned by the agent with options
   prepare a push, but it never runs one.
 - **New files need my OK** before they're committed (the step tool stops and lists them).
 - **"Always rebuild"** in the check: both builds run every time, even if it takes longer, since my time waiting matters
-  less than a commit that doesn't build.
+  less than a commit that doesn't build. Since the public copy (no private sprites) broke twice without anyone
+  noticing, the check also builds and compiles that copy whenever firmware, tools or the published files changed.
 - **The edit gate is soft** (the agent recommended this and I agreed): edits before my answer aren't blocked, but
   they're logged, and the step workflow says to wait.
 - **The harness is experimental, so any issue comes to me first.** The agent may not "fix" the harness on its own.
@@ -47,6 +48,11 @@ The harness was built in small steps, each one planned by the agent with options
 - **Test before trusting it:** before using it for real work, I had it run 3 dry-run tasks written the way I
   normally prompt (a watch-face request, a bug report, a request that needed a locked folder). In all three it
   paused, asked, and didn't work around a block.
+- **Plans state the cost for other Pokémon (added in v0.8.0).** The firmware will be built for other Pokémon lines
+  later, so every plan that touches the pet, its art or its evolutions keeps line-specific choices as data with a
+  generic fallback, and says what each new line, stage or evolution would need because of it (art, a config line,
+  code) and what happens if that's missing. If something looks better now but adds work per line, the plan has to
+  say so, and I decide.
 
 ## What changed once it was used for real
 - **The first guard was too strict.** It treated any `*` anywhere in a command as a wildcard into locked folders,
@@ -57,7 +63,7 @@ The harness was built in small steps, each one planned by the agent with options
 - **The 3-strike rule's first fix:** a locked folder named inside plain text (a note saved with a heredoc) kept
   tripping the guard. After it hit a 4th time I unlocked the harness for the fix: text that a command only *saves*
   (`cat > file <<'X'`) no longer counts as a path, but anything fed into Python or a shell still does, and so does a
-  saved file that the same command then runs. A `*` inside quoted heredoc text is still in the tally (2 hits).
+  saved file that the same command then runs. The second one, a `*` inside quoted heredoc text read as a file wildcard (the shell never expands it there), reached 3 hits a day later and was fixed the same way.
 - **A guard only sees the command, not what a script does.** While preparing this update, a render script the agent
   had written saved images into a locked folder: the guard checked `python3 script.py`, not where the script writes.
   The agent reported it to me before doing anything else. I asked how to stop that without blocking normal notes and
@@ -67,6 +73,11 @@ The harness was built in small steps, each one planned by the agent with options
   every command from the day was replayed through the old and new guard: the only new blocks were real mentions of
   locked folders in scripts.
 - **Logging which sub-agent did what** was added after the dry runs, when the trace couldn't tell them apart.
+- **A script that ignored a flag.** The agent ran the public build script with `--help` to see its options; the
+  script didn't know the flag, ignored it, and ran a real build into the local public copy. The locked-zone row of
+  the step check caught it and I reverted it. Two changes: the script stops on any flag it doesn't know, and the
+  guard only lets it build into a preview folder until I unlock the public copy. The agent's rule now: read a
+  script's code to learn its options instead of running it.
 
 ## A real task with it: the UI polish (firmware 0.7.0)
 I wanted the screens to look less blocky and more natural: the built-in fonts are 1 px wide strokes, and the bars were

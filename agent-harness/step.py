@@ -2,6 +2,8 @@
 """Prove a step is finished, then close it.  (stdlib only, run from WSL)
 
   step.py check [--zones-ok Z[,Z]]      run every check; on ALL PASS remember a fingerprint of the tree.
+                                        "public build": when firmware / tools / public-draft / hooks changed, the public
+                                        copy is built as a preview (.scratch/public-preview) and compiled.
                                         First: nothing changed inside a LOCKED zone (a script can write where the
                                         guard can't see). --zones-ok accepts changes in those zones: the user's
                                         flag only (the guard denies it to the agent).
@@ -13,7 +15,7 @@
 New files are never committed silently: `done` lists them and stops - ask the user, then pass --add.
 This never pushes (pushes are the user's, behind the hard gate).
 """
-import hashlib, json, os, subprocess, sys, time
+import hashlib, json, os, shutil, subprocess, sys, time
 from datetime import datetime
 from pathlib import Path
 
@@ -78,6 +80,41 @@ def summary(out):   # the one line worth reading from a check's output
     return lines[-1][:90] if lines else "(no output)"
 
 
+PUBLIC_SRC = ("kalos-dex/firmware/", "kalos-dex/tools/", "public-draft/", ".agent/hooks/")   # the public copy is built from these
+PREVIEW = ROOT / ".scratch/public-preview"
+
+
+def public_touched():   # a change that could break the public copy (firmware without the private sprites, harness copy)
+    for line in git("status", "--porcelain", "--untracked-files=all").splitlines():
+        if line[3:].split(" -> ")[-1].strip('"').startswith(PUBLIC_SRC):
+            return True
+    return False
+
+
+def public_build():
+    """The public copy as a preview (never the public clone): build_public.py --out, then both firmware builds in it,
+    which have no sprites / egg (placeholder art). Two drawing changes broke that build unnoticed (2026-10-28/29)."""
+    pio_cache, keep = PREVIEW / "firmware/kalos-dex/.pio", ROOT / ".scratch/public-preview-pio"
+    if pio_cache.exists():   # fresh copy each time (a deleted file must not linger), but keep the compile cache
+        shutil.rmtree(keep, ignore_errors=True)
+        shutil.move(str(pio_cache), str(keep))
+    shutil.rmtree(PREVIEW, ignore_errors=True)
+    out = subprocess.run(["python3", "public-draft/build_public.py", "--out", str(PREVIEW.relative_to(ROOT))],
+                         cwd=ROOT, capture_output=True, text=True, errors="replace")
+    if keep.exists():
+        shutil.move(str(keep), str(pio_cache))
+    if out.returncode:
+        return out
+    fw, says = PREVIEW / "firmware/kalos-dex", []
+    for env in ("esp32dev", "hwtest"):
+        r = subprocess.run([PIO, "run", "-e", env], cwd=fw, capture_output=True, text=True, errors="replace")
+        if r.returncode:
+            return r
+        says.append(env)
+    out.stdout += "\npublic copy builds: " + " + ".join(says) + " SUCCESS (no sprites)"
+    return out
+
+
 def check(zones_ok=()):
     fp, rows = fingerprint(), []
     hits = [(n, f) for n, f in zone_changes() if n not in zones_ok]
@@ -91,9 +128,15 @@ def check(zones_ok=()):
     if hits:
         print("      -> tell the user; only they clear it: unlock that zone, or run it themselves with "
               "--zones-ok " + ",".join(sorted({n for n, _ in hits})))
-    for name, cmd, cwd in CHECKS:
+    checks = list(CHECKS)
+    if public_touched():
+        checks += [("public build", None, ROOT)]
+    else:
+        rows.append({"check": "public build", "ok": True, "s": 0, "says": "skipped (nothing it is built from changed)"})
+        print(f"PASS  {'public build':<15} {0:>5}s  {rows[-1]['says']}")
+    for name, cmd, cwd in checks:
         t = time.time()
-        r = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, errors="replace")
+        r = public_build() if cmd is None else subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, errors="replace")
         ok = r.returncode == 0
         ok_all &= ok
         rows.append({"check": name, "ok": ok, "s": round(time.time() - t, 1), "says": summary(r.stdout + r.stderr)})

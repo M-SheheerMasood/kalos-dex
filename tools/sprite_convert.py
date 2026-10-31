@@ -2,7 +2,7 @@
 """PMD Sprite Collab zips -> one firmware header for a Pokémon line (4-bit frames, normal + shiny palette).
 
 usage (needs Pillow: .scratch/venv/bin/python):
-  sprite_convert.py            write firmware/kalos-dex/sprites/aegislash_line.h + previews in .scratch/previews/
+  sprite_convert.py            write firmware/kalos-dex/sprites/aegislash_line.h + previews in .scratch/previews/sprites/
   sprite_convert.py --check    exit 1 if the header on disk differs from what the zips give
 
 Reads kalos-dex/assets/sprites-src/<Name>.zip and <Name>(Shiny).zip straight from the zip (no extracting).
@@ -19,18 +19,21 @@ from PIL import Image
 KD = Path(__file__).resolve().parents[1]
 SRC = KD / "assets/sprites-src"
 OUT = KD / "firmware/kalos-dex/sprites/aegislash_line.h"
-PREVIEW = KD.parent / ".scratch/previews"
+PREVIEW = KD.parent / ".scratch/previews/sprites"
 SCALE, BOX_W, BOX_H, GROUND = 3, 232, 142, 128          # Home pet area (home_screen.cpp), ground = PET_H - 14
 JUMPY = {"play"}       # body cropped per frame + a "lift" per frame, so the firmware can draw the jump lower
 LIFT_SCALE = 1.5       # screen px per source px of lift (the body itself is drawn x SCALE)
 
-ROLES = ["idle", "sleep", "play", "hurt", "feed"]        # what the firmware asks for -> PMD animation (first found)
-PICK = {"idle": ["Idle"], "sleep": ["Sleep"], "play": ["Hop"], "hurt": ["Pain", "Hurt"], "feed": ["Eat", "Charge"]}
-FORMS = [  # C name, zip, roles it needs
-    ("HONEDGE", "Honedge", ROLES),
-    ("DOUBLADE", "Doublade", ROLES),
-    ("AEGISLASH_SHIELD", "Aegislash(Shield)", ROLES),
-    ("AEGISLASH_SWORD", "Aegislash(Sword)", ["idle", "play"]),   # only shown while playing
+ROLES = ["idle", "sleep", "play", "hurt", "feed", "evolve"]   # what the firmware asks for -> PMD animation (first found)
+PICK = {"idle": ["Idle"], "sleep": ["Sleep"], "play": ["Hop"], "hurt": ["Pain", "Hurt"], "feed": ["Eat", "Charge"],
+        "evolve": []}   # evolve = the show-off move right after evolving INTO this form: picked per form below
+OPTIONAL = {"evolve"}   # missing -> nullptr, the firmware falls back (evolve -> play)
+# ---- per line (the only part to change for another Pokemon line): C name, zip, roles, per-form picks
+FORMS = [
+    ("HONEDGE", "Honedge", ROLES, {}),                                  # first form: never evolved into
+    ("DOUBLADE", "Doublade", ROLES, {"evolve": ["SpAttack"]}),          # user's picks, 2026-10-31
+    ("AEGISLASH_SHIELD", "Aegislash(Shield)", ROLES, {"evolve": ["Rotate"]}),
+    ("AEGISLASH_SWORD", "Aegislash(Sword)", ["idle", "play"], {}),     # only shown while playing
 ]
 
 
@@ -55,14 +58,17 @@ def visible(p):
     return p[3] >= 128
 
 
-def build_form(cname, zip_name, roles):
+def build_form(cname, zip_name, roles, picks):
     zn, an = sheet(zip_name)
     zs, as_ = sheet(zip_name + "(Shiny)")
     out, colours, shiny_votes = {}, set(), defaultdict(Counter)
     for role in roles:
-        name = next((n for n in PICK[role] if n in an), None)
+        tries = picks.get(role, PICK[role])
+        name = next((n for n in tries if n in an), None)
         if name is None:
-            sys.exit(f"{zip_name}: no animation for '{role}' (tried {PICK[role]})")
+            if role in OPTIONAL:
+                continue
+            sys.exit(f"{zip_name}: no animation for '{role}' (tried {tries})")
         fr, ms, fw, fh = frames(zn, an, name)
         frs, _, _, _ = frames(zs, as_, name)
         boxes = [f.getbbox() for f in fr if f.getbbox()]
@@ -117,7 +123,8 @@ def header(forms):
          "// lift (jumps only, else nullptr): source px the body is raised in each frame, drawn at SPR_LIFT_SCALE screen px each",
          f"#define SPR_LIFT_SCALE {LIFT_SCALE}f",
          "// dx/dy: top-left of the box relative to the PMD frame centre; ground = idle feet relative to that centre",
-         "struct SprForm { const uint16_t *pal, *shiny; int8_t ground; const SprAnim *idle, *sleep, *play, *hurt, *feed; };", ""]
+         "// evolve = optional show-off move after evolving into this form (nullptr: the firmware uses play)",
+         "struct SprForm { const uint16_t *pal, *shiny; int8_t ground; const SprAnim *idle, *sleep, *play, *hurt, *feed, *evolve; };", ""]
     total = 0
     for f in forms:
         n = f["cname"].lower()

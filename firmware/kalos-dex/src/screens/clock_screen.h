@@ -14,9 +14,9 @@ class ClockScreen : public Screen {
   bool onEvent(const InputEvent &e) override;
   void repaintTop() override { lastSec = -1; }   // the next update draws the whole face again
  private:
-  void render(const struct tm &lt, bool ok);
+  void render(const struct tm &lt, bool ok, bool seconds = true);
   int lastSec = -1;
-  bool demo = false;          // "fast day": one whole day in 60 s (hold Play)
+  bool demo = false;          // "fast day": one whole day in 60 s (hold Play), then it stops by itself
   uint32_t demoStart = 0, lastDemoFrame = 0;
   time_t demoBase = 0;
 };

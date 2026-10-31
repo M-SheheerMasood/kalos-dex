@@ -2,7 +2,7 @@
 """The UI font (Nunito ExtraBold, SIL OFL – picked by the user 2026-10-27, step 08) -> TFT_eSPI smooth fonts.
 
 usage (needs Pillow: .scratch/venv/bin/python):
-  font_convert.py            write firmware/kalos-dex/include/fonts/nunito_xb.inc + .scratch/previews/font_fw.png
+  font_convert.py            write firmware/kalos-dex/include/fonts/nunito_xb.inc + .scratch/previews/ui/font_fw.png
   font_convert.py --check    exit 1 if the file on disk differs
 
 Writes one .vlw font per size (the format TFT_eSPI's loadFont() reads: header, 7 numbers per glyph, then the
@@ -16,7 +16,7 @@ from PIL import Image, ImageDraw, ImageFont
 KD = Path(__file__).resolve().parents[1]
 TTF = KD / "assets/fonts/Nunito-wght.ttf"
 OUT = KD / "firmware/kalos-dex/include/fonts/nunito_xb.inc"
-PREVIEW = KD.parent / ".scratch/previews/font_fw.png"
+PREVIEW = KD.parent / ".scratch/previews/ui/font_fw.png"
 WEIGHT = 800                                       # ExtraBold
 SIZES = {"SMALL": 12, "BODY": 15, "TITLE": 22}     # ~ the built-in fonts 1 / 2 / 4
 CHARS = [chr(c) for c in range(33, 127)]

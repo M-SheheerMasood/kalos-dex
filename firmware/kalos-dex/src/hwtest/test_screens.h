@@ -58,6 +58,18 @@ class DisplayScreen : public Screen {
   int preset = 0, vcom = -1;   // vcom -1 = the preset's own value
 };
 
+// Glow: step through every mood's side glow on the real strip (Feed / Play), without touching the pet.
+class GlowScreen : public Screen {
+ public:
+  const char *name() const override { return "Glow"; }
+  void enter() override;
+  void leave() override;
+  bool onEvent(const InputEvent &e) override;
+ private:
+  void draw();
+  int idx = 0;
+};
+
 class ClockTestScreen : public Screen {
  public:
   const char *name() const override { return "Clock test"; }

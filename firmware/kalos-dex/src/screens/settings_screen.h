@@ -1,4 +1,5 @@
-// Settings: screen brightness, light-strip brightness, night dimming, 12 / 24 h, knob direction, reset pet.
+// Settings: screen brightness, light-strip brightness, night dimming, 12 / 24 h, knob direction, reset pet;
+// page 2: egg hatch time, Debug (test pet + the Debug screen, not saved), Remember page (screens open where left). Pages of PAGE_ROWS rows: moving past the last row of a page shows the next ("1/2" top right).
 // The knob turns the same way round here as for the volume ("Knob direction" flips both).
 // Feed / Play = previous / next row, knob turn (or press) = change it. Here the knob is NOT the volume knob.
 // Reset pet = hold Feed + Play together for 3 s (anywhere on this screen). Saved 3 s after the last change.
@@ -17,7 +18,8 @@ class SettingsScreen : public Screen {
  private:
   void drawHeader();
   void drawRow(int i);
-  void change(int steps);
+  void drawPage();             // the rows of the chosen row's page (+ the page number)
+  void change(int steps, int raw, bool press);   // steps: user's direction, raw: physical
   int sel = 0;
   uint32_t holdStart = 0, doneAt = 0;
   int shownHold = -1;

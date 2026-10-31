@@ -7,6 +7,8 @@
 #include "music_screen.h"
 #include "settings_screen.h"
 #include "dex_screen.h"
+#include "debug_screen.h"
+#include "pet.h"
 #include "media.h"
 #include "night.h"
 
@@ -15,6 +17,7 @@ static ClockScreen clockScreen;
 static MusicScreen musicScreen;
 static SettingsScreen settingsScreen;
 static DexScreen dexScreen;
+static DebugScreen debugScreen;   // only while Debug is on (Settings page 2)
 #ifdef HWTEST   // hardware-test build: the test screens come after the real ones
 #include "../hwtest/test_screens.h"
 static ClockTestScreen clockTestScreen;
@@ -23,12 +26,14 @@ static LightsScreen lightsScreen;
 static EdgeScreen edgeScreen;
 static InfoScreen infoScreen;
 static DisplayScreen displayScreen;
-static Screen *order[] = {&homeScreen, &dexScreen, &clockScreen, &musicScreen, &settingsScreen, &displayScreen, &clockTestScreen, &inputScreen, &lightsScreen, &edgeScreen, &infoScreen};
+static GlowScreen glowScreen;
+static Screen *order[] = {&homeScreen, &dexScreen, &clockScreen, &musicScreen, &settingsScreen, &debugScreen, &glowScreen, &displayScreen, &clockTestScreen, &inputScreen, &lightsScreen, &edgeScreen, &infoScreen};
 #else
-static Screen *order[] = {&homeScreen, &dexScreen, &clockScreen, &musicScreen, &settingsScreen};
+static Screen *order[] = {&homeScreen, &dexScreen, &clockScreen, &musicScreen, &settingsScreen, &debugScreen};
 #endif
 static constexpr int COUNT = sizeof(order) / sizeof(order[0]);
 static int currentIdx = 0;
+static uint32_t shownAt = 0;   // when the current screen finished appearing (Back is ignored until + SCREEN_LOCK_MS)
 
 // ---- overlays on every screen (not Music, it shows the volume itself), in the top band:
 // volume pop-up for VOL_POPUP_MS after the volume changes; a blinking mute badge in the top-right corner.
@@ -68,17 +73,25 @@ static TFT_eSprite badge(&tft);              // 24 x 24, 1.2 KB, made once: the 
 static uint16_t behind[BADGE * BADGE];       // what the screen has under the badge (1.2 KB)
 static uint16_t badgeImg[BADGE * BADGE];     // the badge itself (1.2 KB)
 static uint8_t badgeAlpha = 0;               // 0 = invisible ... 255 = solid
+static constexpr uint16_t BADGE_CLEAR = 0xF81F;   // magenta: "not part of the badge" (never used in it)
 static bool behindInit = [] { for (uint16_t &p : behind) p = col::RED; return true; }();
 
 static bool makeBadge() {
   if (badge.created()) return true;
   badge.setColorDepth(16);
   if (!badge.createSprite(BADGE, BADGE)) return false;
-  badge.fillSprite(col::SCREEN_DARK);
-  badge.drawRect(0, 0, BADGE, BADGE, col::WHITE);
-  speaker(badge, 3, 5, col::WHITE);
-  badge.drawLine(15, 8, 21, 16, col::RED); badge.drawLine(16, 8, 22, 16, col::RED);
-  badge.drawLine(21, 8, 15, 16, col::RED); badge.drawLine(22, 8, 16, 16, col::RED);
+  // style A (user's pick 2026-10-28): dark rounded card, 2 px black rim, white speaker, red cross; outside the
+  // rounded corners = BADGE_CLEAR (shows what's behind)
+  badge.fillSprite(BADGE_CLEAR);
+  badge.fillRoundRect(0, 0, BADGE, BADGE, 6, col::BLACK);
+  badge.fillRoundRect(2, 2, BADGE - 4, BADGE - 4, 5, col::SCREEN_DARK);
+  badge.fillRect(4, 10, 4, 4, col::WHITE);                                   // speaker: box + cone
+  badge.fillTriangle(7, 10, 12, 6, 12, 17, col::WHITE);
+  badge.fillTriangle(7, 10, 7, 13, 12, 17, col::WHITE);
+  for (int o = 0; o < 2; o++) {                                              // red cross, 2 px lines
+    badge.drawLine(14 + o, 9, 20 + o, 15, 0xE945);
+    badge.drawLine(14 + o, 15, 20 + o, 9, 0xE945);
+  }
   for (int y = 0; y < BADGE; y++) for (int x = 0; x < BADGE; x++) badgeImg[y * BADGE + x] = badge.readPixel(x, y);
   return true;
 }
@@ -88,7 +101,8 @@ static void pushBadge() {   // behind + badge at badgeAlpha
   for (int y = 0; y < BADGE; y++)
     for (int x = 0; x < BADGE; x++) {
       const int i = y * BADGE + x;
-      badge.drawPixel(x, y, badgeAlpha ? tft.alphaBlend(badgeAlpha, badgeImg[i], behind[i]) : behind[i]);
+      const bool clear = badgeImg[i] == BADGE_CLEAR || !badgeAlpha;
+      badge.drawPixel(x, y, clear ? behind[i] : tft.alphaBlend(badgeAlpha, badgeImg[i], behind[i]));
     }
   badge.pushSprite(BADGE_X, BADGE_Y);
 }
@@ -105,12 +119,16 @@ static void overlays(Screen *scr, uint32_t now) {
     tft.resetViewport();
     if (here) scr->repaintTop();
   }
-  // mute badge: slow fade in / out (never fully solid, so what's behind shows through)
+  // mute badge: fade up, hold at the peak, fade down, hold at 0 (user, 2026-10-28); never fully solid
   const bool wantBadge = here && media::muted() && !popupUp;
   if (wantBadge && now - lastBadge >= BADGE_FRAME_MS) {
     lastBadge = now;
-    const float ph = (now % MUTE_PULSE_MS) / float(MUTE_PULSE_MS);
-    badgeAlpha = MUTE_ALPHA_MAX * (0.5f - 0.5f * cosf(ph * TWO_PI));
+    const uint32_t t = now % (2 * (MUTE_FADE_MS + MUTE_HOLD_MS));
+    float a = 0;
+    if (t < MUTE_FADE_MS) a = t / float(MUTE_FADE_MS);
+    else if (t < MUTE_FADE_MS + MUTE_HOLD_MS) a = 1;
+    else if (t < 2 * MUTE_FADE_MS + MUTE_HOLD_MS) a = 1 - (t - MUTE_FADE_MS - MUTE_HOLD_MS) / float(MUTE_FADE_MS);
+    badgeAlpha = MUTE_ALPHA_MAX * (0.5f - 0.5f * cosf(a * PI));   // eased in and out
     pushBadge();
     badgeUp = true;
   } else if (!wantBadge && badgeUp) {
@@ -134,6 +152,7 @@ static void show(int i) {
   Serial.printf("screen -> %s (drawn in %lu ms)  RAM free %u KB, biggest block %u KB\n", order[currentIdx]->name(),
                 millis() - t, ESP.getFreeHeap() / 1024, heap_caps_get_largest_free_block(MALLOC_CAP_8BIT) / 1024);
   display::fadeBacklight(level, SCREEN_FADE_MS);
+  shownAt = millis();
 }
 
 namespace screens {
@@ -144,7 +163,11 @@ void begin() {
   Serial.printf("screen -> %s  RAM free %u KB, biggest block %u KB\n", order[0]->name(), ESP.getFreeHeap() / 1024,
                 heap_caps_get_largest_free_block(MALLOC_CAP_8BIT) / 1024);
 }
-void next() { show((currentIdx + 1) % COUNT); }
+void next() {
+  int i = (currentIdx + 1) % COUNT;
+  if (order[i] == &debugScreen && !pet::testMode()) i = (i + 1) % COUNT;   // Debug off: skipped
+  show(i);
+}
 void home() { if (currentIdx != 0) show(0); }
 void update(uint32_t now) {
   order[currentIdx]->update(now);
@@ -165,7 +188,9 @@ void blendCorner(TFT_eSprite &spr, int sx, int sy) {
 void handle(const InputEvent &e) {
   // the screen gets the first look (the input monitor wants to show everything)
   const bool used = order[currentIdx]->onEvent(e);
-  if (e.type == Ev::Press && e.button == Btn::Screen) next();
+  // Back pressed while a screen was switching (queued) or right after: ignored, no accidental double skip (user,
+  // 2026-10-31). Holding Back for Home is a separate event and always works.
+  if (e.type == Ev::Press && e.button == Btn::Screen) { if (millis() - shownAt >= SCREEN_LOCK_MS) next(); }
   else if (e.type == Ev::Hold && e.button == Btn::Screen) home();
   else if (used) return;
   // the knob is the PC's media knob on every screen (unless a test screen uses it)

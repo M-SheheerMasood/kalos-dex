@@ -384,3 +384,39 @@ bool DisplayScreen::onEvent(const InputEvent &e) {
   }
   return false;
 }
+
+// ---- glow per mood (step 2026-10-28-06)
+static const struct { pet::Mood m; const char *look; } GLOWS[] = {
+  {pet::Mood::Happy, "green, breathing 3 s"}, {pet::Mood::Okay, "warm white, steady"},
+  {pet::Mood::Hungry, "deep orange beat"}, {pet::Mood::Tired, "teal, slow breathe 7 s"},
+  {pet::Mood::Sad, "purple, slow breathe 6 s"}, {pet::Mood::Angry, "fast red beat"},
+  {pet::Mood::Sleeping, "dim navy, steady"}, {pet::Mood::Egg, "warm white, slow breathe"}};
+static constexpr int GLOW_COUNT = sizeof(GLOWS) / sizeof(GLOWS[0]);
+
+void GlowScreen::draw() {
+  tft.fillScreen(col::SCREEN_BG);
+  title("Glow");
+  char buf[24];
+  snprintf(buf, sizeof buf, "%d / %d", idx + 1, GLOW_COUNT);
+  tft.setTextDatum(MC_DATUM);
+  tft.setTextColor(col::SCREEN_DARK, col::SCREEN_BG);
+  tft.drawString(buf, SCREEN_W / 2, 90, 2);
+  tft.setTextColor(col::TEXT, col::SCREEN_BG);
+  tft.drawString(pet::moodName(GLOWS[idx].m), SCREEN_W / 2, 140, 4);
+  tft.drawString(GLOWS[idx].look, SCREEN_W / 2, 180, 2);
+  hint("Feed / Play: previous / next");
+  pet::showGlow(GLOWS[idx].m);
+  Serial.printf("glow test: %s (%s)\n", pet::moodName(GLOWS[idx].m), GLOWS[idx].look);
+}
+
+void GlowScreen::enter() { pet::holdGlow(true); draw(); }
+void GlowScreen::leave() { pet::holdGlow(false); }   // the pet's real mood glow comes back
+
+bool GlowScreen::onEvent(const InputEvent &e) {
+  if (e.type == Ev::Press && (e.button == Btn::Feed || e.button == Btn::Play)) {
+    idx = (idx + (e.button == Btn::Play ? 1 : GLOW_COUNT - 1)) % GLOW_COUNT;
+    draw();
+    return true;
+  }
+  return false;
+}

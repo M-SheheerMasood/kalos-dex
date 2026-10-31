@@ -218,7 +218,49 @@ def main():
         (D, bash("cat >> notes.md <<'EOF'\nok\nEOF\ngit push")),
         (D, bash("python3 kalos-dex/tools/step.py check --zones-ok hardware")),
         (A, bash("python3 kalos-dex/tools/step.py check")),
+        # H4 (2026-10-28): a `*` inside a quoted heredoc is text, never a file pattern
+        (A, bash("cat > .scratch/tmp/zg-test/m.py <<'EOF'\nw = 3 * 4\nrows = [[1] * w for _ in range(2)]\nEOF")),
+        (A, bash("cat > .scratch/tmp/zg-test/m.py <<'EOF'\nx = a * b\nEOF\npython3 .scratch/tmp/zg-test/m.py")),
+        (A, bash("python3 - <<'EOF'\nprint(2 * 3)\nEOF")),
+        (D, bash("python3 - <<'EOF'\nprint(2 * 3)\nopen('kalos-dex/_archive/x', 'w')\nEOF")),   # the text check stays
+        (D, bash("ls *")),                                                              # outside a heredoc: still a wildcard
+        (D, bash("cat > n.md <<EOF\nls *\nEOF")),                                         # unquoted heredoc: still checked
+        (D, bash("python3 - <<'EOF'\nopen('.agent/hooks/zone_guard.py', 'w')\nEOF")),  # write into read-only: still seen
+        # G1 (2026-10-28): a `*` inside $( ) / backticks is a wildcard too
+        (D, bash("echo $(ls *)")),
+        (D, bash("x=$(ls *)")),
+        (D, bash("echo `ls *`")),
+        (A, bash("echo $(ls kalos-dex/firmware/kalos-dex/src/*.cpp)")),
         (A, bash('python3 kalos-dex/tools/step.py done 2026-10-27-11 "check fails on locked zones (user-only --zones-ok)"')),
+        # 2026-10-29: the public build writes into the sealed clone unless --out (an unknown flag once ran it for real)
+        (D, bash("python3 public-draft/build_public.py")),
+        (D, bash("python3 public-draft/build_public.py --bogus")),
+        (D, bash("python3 public-draft/build_public.py -x --out .scratch/p")),
+        (D, bash("cd public-draft && python3 build_public.py 2>&1 | tail -2")),
+        (D, bash("timeout 60 python3 -I public-draft/build_public.py")),
+        (D, bash("X=1 python3 public-draft/build_public.py > .scratch/log.txt")),
+        (D, bash("public-draft/build_public.py")),
+        (A, bash("python3 public-draft/build_public.py --out .scratch/public-preview 2>&1 | tail -2")),
+        (A, bash("python3 public-draft/build_public.py --help")),
+        (A, bash("grep -n argv public-draft/build_public.py")),                  # a mention, not a run
+        (A, bash("sed -n 1,20p public-draft/build_public.py")),
+        (A, bash('git commit -m "build_public.py: refuse unknown flags"')),
+        # H5 (2026-10-29): only real git runs print files; git show <rev>:<file> = one file, judged by its zone
+        (A, bash("git show HEAD:.agent/hooks/zone_guard.py > .scratch/tmp/old.py")),
+        (A, bash("git show HEAD~2:kalos-dex/firmware/kalos-dex/src/pet.cpp | head")),
+        (D, bash("git show HEAD:kalos-dex/_archive/README.md")),
+        (D, bash("git -C . show HEAD:kalos-dex/scad/kalos_case.scad")),
+        (A, bash("python3 - <<'EOF'\nnote = 'the git show rule blocked a note'\nEOF")),
+        (A, bash("grep -n 'git log -p / git show' .agent/hooks/zone_guard.py")),
+        (A, bash('git commit -m "guard: git show HEAD:file allowed"')),
+        (D, bash("git show HEAD")),
+        (D, bash("git --no-pager log -p -3")),
+        (D, bash("echo $(git show HEAD)")),
+        (D, bash("cd kalos-dex && git show")),
+        (D, bash("cat > n.md <<EOF\n$(git show HEAD)\nEOF")),                       # unquoted heredoc: runs
+        (A, bash("git show --stat HEAD")),
+        (A, bash("git log -p -- kalos-dex/firmware/kalos-dex/src/pet.cpp")),
+        (A, bash("git log -3 --oneline")),
     ]
     for want, data in scripts:
         why, _ = g.decide(data)
@@ -238,6 +280,14 @@ def main():
         got = D if why else A
         fails += got != want
         print("%s unlock(hardware) %-5s %s" % ("PASS" if got == want else "FAIL", got, data["tool_input"]))
+    json.dump({"sealed": "test"}, open(g.UNLOCK, "w"))                # publishing: the user unlocked 'sealed'
+    sealed = [(A, bash("python3 public-draft/build_public.py"))]
+    for want, data in sealed:
+        why, _ = g.decide(data)
+        got = D if why else A
+        fails += got != want
+        print("%s unlock(sealed) %-5s %s%s" % ("PASS" if got == want else "FAIL", got, data["tool_input"], "" if got == want else "  (%s)" % why))
+    extra += sealed
     os.remove(g.UNLOCK)
     g.TRACE = os.path.join(tmp, "trace.jsonl")                    # trace names which subagent made the call
     for aid in ("a176006a4d22", ""):

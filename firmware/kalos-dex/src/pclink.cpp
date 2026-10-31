@@ -61,6 +61,8 @@ static void run(char *cmd) {
     if (strncmp(a, "SKIP ", 5) == 0) pet::skipMinutes(strtoul(a + 5, nullptr, 10));     // PET SKIP <minutes>
     else if (strncmp(a, "XP ", 3) == 0) pet::addXp(strtoul(a + 3, nullptr, 10));        // PET XP <n>
     else if (strcmp(a, "HATCH") == 0) pet::hatchNow();
+    else if (strcmp(a, "EVO READY") == 0) Serial.printf("evolve ready: %s\n", pet::evolveReadyNow() ? "yes" : "no");   // Debug's "evolve Lv"
+    else if (strcmp(a, "EVOLVE") == 0) pet::evolveNow();                                     // no show (Home has it)
     else if (strncmp(a, "STAGE ", 6) == 0) pet::setStage(atoi(a + 6));                    // PET STAGE <1-3>
     else if (strncmp(a, "SHINY ", 6) == 0) pet::setShiny(atoi(a + 6));                    // PET SHINY <0|1>
     else if (strncmp(a, "NOCARE ", 7) == 0) pet::setCareHoursAgo(strtoul(a + 7, nullptr, 10));   // PET NOCARE <hours>
@@ -71,7 +73,7 @@ static void run(char *cmd) {
     else if (strcmp(a, "FEED") == 0) petart::reactTo(pet::feed(), petart::Reaction::Feed, millis());   // + reaction on Home
     else if (strcmp(a, "PLAY") == 0) petart::reactTo(pet::play(), petart::Reaction::Play, millis());
     else if (strncmp(a, "SET ", 4) == 0 && a[4] && a[5] == ' ') pet::setStat(a[4], atof(a + 6));   // PET SET f|u|e <0..100>
-    else { Serial.println("ERR PET: SKIP <min> | XP <n> | HATCH | STAGE <1-3> | SHINY <0|1> | NOCARE <h> | SCALE <20-45> | RESET | FEED | PLAY | SET f|u|e <v>"); return; }
+    else { Serial.println("ERR PET: SKIP <min> | XP <n> | HATCH | EVO READY | EVOLVE | STAGE <1-3> | SHINY <0|1> | NOCARE <h> | SCALE <20-45> | RESET | FEED | PLAY | SET f|u|e <v>"); return; }
     pet::printStatus();
 #endif
   } else if (strcmp(cmd, "PING") == 0) {

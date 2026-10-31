@@ -161,7 +161,7 @@ static void hand(float angDeg, float length, float tail, float radius, uint16_t 
     }
 }
 
-void ClockScreen::render(const struct tm &lt, bool ok) {
+void ClockScreen::render(const struct tm &lt, bool ok, bool seconds) {
   const float hours = ok ? lt.tm_hour + lt.tm_min / 60.f + lt.tm_sec / 3600.f : 12;
   drawScene((hours - 12) * 15);                    // 360° per 24 h: sun on top at noon
   drawBorder();
@@ -170,7 +170,7 @@ void ClockScreen::render(const struct tm &lt, bool ok) {
     const uint16_t red = rgb(230, 30, 30);
     sword((lt.tm_hour % 12 + lt.tm_min / 60.f + lt.tm_sec / 3600.f) * 30, 17, {rgb(255, 255, 255), rgb(205, 205, 210), rgb(130, 130, 140)});  // iron = hours
     sword((lt.tm_min + lt.tm_sec / 60.f) * 6, 25, {rgb(200, 255, 250), rgb(80, 215, 205), rgb(30, 140, 130)});                             // diamond = minutes
-    hand(lt.tm_sec * 6, 24, 5, 0.5f, red);
+    if (seconds) hand(lt.tm_sec * 6, 24, 5, 0.5f, red);   // not in the demo: at 24 min/s it looked like it ran backwards
     for (int y = 39; y <= 40; y++) for (int x = 29; x <= 30; x++) tex[y * W + x] = red;
   }
   // blow the Minecraft pixels up 4x and push in strips (small buffer, whole screen in ~60 ms)
@@ -198,6 +198,8 @@ void ClockScreen::enter() {
   update(millis());
 }
 
+static constexpr uint32_t DEMO_MS = 60000;   // 60 s x 1.44 = 86400 s: exactly one day
+
 bool ClockScreen::onEvent(const InputEvent &e) {
   if (e.type == Ev::Hold && e.button == Btn::Play) {   // fast-day demo on/off
     demo = !demo;
@@ -212,12 +214,18 @@ bool ClockScreen::onEvent(const InputEvent &e) {
 void ClockScreen::update(uint32_t now) {
   struct tm lt;
   if (demo) {                                          // 1 real second = 24 clock minutes, ~12 frames a second
-    if (now - lastDemoFrame < 80) return;
-    lastDemoFrame = now;
-    const time_t t = demoBase + (time_t)((now - demoStart) * 1.44f);
-    localtime_r(&t, &lt);
-    render(lt, true);
-    return;
+    if (now - demoStart >= DEMO_MS) {                  // one full day shown: back to the real time (user, PLAN §3d)
+      demo = false;
+      lastSec = -1;
+      Serial.println("clock: fast-day demo done");
+    } else {
+      if (now - lastDemoFrame < 80) return;
+      lastDemoFrame = now;
+      const time_t t = demoBase + (time_t)((now - demoStart) * 1.44f);
+      localtime_r(&t, &lt);
+      render(lt, true, false);
+      return;
+    }
   }
   const bool ok = timekeeper::localTime(lt);
   const int sec = ok ? lt.tm_sec : -2;
